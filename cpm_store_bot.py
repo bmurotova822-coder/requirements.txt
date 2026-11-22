@@ -6,7 +6,21 @@ from datetime import datetime, timezone, timedelta
 from html import escape
 from urllib.parse import urlparse
 
-import telebot
+try:
+    import telebot
+except ModuleNotFoundError as exc:
+    if exc.name != "telebot":
+        raise
+    # Last-resort startup recovery for hosts that run the start command but
+    # skipped the configured build step. Normal deployment installs from
+    # requirements.txt during the build.
+    import subprocess
+    import sys
+    subprocess.check_call([
+        sys.executable, "-m", "pip", "install", "--no-cache-dir",
+        "pyTelegramBotAPI==4.37.0",
+    ])
+    import telebot
 try:
     from dotenv import load_dotenv
 except ImportError:

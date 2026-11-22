@@ -114,6 +114,20 @@ def button_url(value):
     if re.fullmatch(r"[A-Za-z0-9_]{5,32}", username):
         return f"https://t.me/{username}"
     return None
+
+def channel_username_from_url(value):
+    """Extract a public channel username from t.me/username (not private invite links)."""
+    value=(value or "").strip()
+    if value and not value.startswith(("https://","http://")):
+        value="https://"+value
+    parsed=urlparse(value)
+    if parsed.netloc.lower() not in ("t.me","www.t.me","telegram.me","www.telegram.me"):
+        return ""
+    parts=[x for x in parsed.path.split("/") if x]
+    if parts and parts[0].lower()=="s": parts=parts[1:]
+    if not parts or parts[0].startswith(("+","joinchat")): return ""
+    username=parts[0].lstrip("@")
+    return "@"+username if re.fullmatch(r"[A-Za-z0-9_]{5,32}",username) else ""
 def inline_btn(text, callback_data=None, url=None, style=None):
     if style is None:
         data = callback_data or ""
@@ -148,9 +162,19 @@ def configured_subscriptions():
         if isinstance(item,str): item={"chat_id":item}
         channel=str(item.get("chat_id") or item.get("channel") or "").strip()
         if not channel or channel.lower().lstrip("@") in {"your_channel","example","placeholder","none","off"} or channel in seen: continue
+        original_channel=channel
         link=str(item.get("url") or "").strip()
+        # Older admin setups sometimes saved the public t.me link in chat_id.
+        # Telegram getChatMember requires @username or the numeric chat ID.
+        if channel.startswith(("https://","http://","t.me/","www.t.me/","telegram.me/")):
+            parsed_username=channel_username_from_url(channel)
+            if parsed_username:
+                link=link or channel
+                channel=parsed_username
         if not link and channel.startswith("@"): link=f"https://t.me/{channel[1:]}"
-        result.append({"chat_id":channel,"url":button_url(link),"title":str(item.get("title") or channel)})
+        title=str(item.get("title") or channel).strip()
+        if title in (original_channel,link) or channel_username_from_url(title): title=channel
+        result.append({"chat_id":channel,"url":button_url(link),"title":title})
         seen.add(channel)
     return result
 
@@ -296,6 +320,9 @@ def admin_text(m,s):
             bits=[x.strip() for x in line.split("|",2)]
             channel=bits[0]
             link=bits[1] if len(bits)>1 else (f"https://t.me/{channel[1:]}" if channel.startswith("@") else "")
+            if channel.startswith(("https://","http://","t.me/","www.t.me/","telegram.me/")):
+                link=link or channel
+                channel=channel_username_from_url(channel)
             if not (channel.startswith("@") or re.fullmatch(r"-?\d{5,20}",channel)):
                 invalid.append(str(line_no)); continue
             valid_link=button_url(link)

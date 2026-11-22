@@ -1,7 +1,6 @@
-aiogram>=3.13,<4
-Flask>=3.0
-pymongo>=4.8
-aiohttp>=3.9
-werkzeug>=3.0
-Pillow>=10.0
-fonttools>=4.50
+Flask==3.0.3
+gunicorn==22.0.0
+pymongo==4.10.1
+dnspython==2.7.0
+pyTelegramBotAPI==4.37.0
+python-dotenv==1.0.1

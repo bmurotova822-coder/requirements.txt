@@ -5,8 +5,6 @@ import os, re, secrets
 from datetime import datetime, timezone, timedelta
 from html import escape
 from urllib.parse import urlparse
-
-import telebot
 from dotenv import load_dotenv
 from flask import Flask, abort, jsonify, request
 from pymongo import MongoClient, ReturnDocument

@@ -5,18 +5,26 @@ import os, re, secrets
 from datetime import datetime, timezone, timedelta
 from html import escape
 from urllib.parse import urlparse
-from dotenv import load_dotenv
+
+import telebot
+try:
+    from dotenv import load_dotenv
+except ImportError:
+    # Render injects environment variables directly. python-dotenv is only
+    # needed for local .env.cpm_store development, so it must not block startup.
+    def load_dotenv(*args, **kwargs):
+        return False
 from flask import Flask, abort, jsonify, request
 from pymongo import MongoClient, ReturnDocument
 from telebot import types
 
 load_dotenv(".env.cpm_store")
-BOT_TOKEN = os.getenv("BOT_TOKEN", "9000034167:AAGibXV0h9wRmhFyB845xde7x8GDmjj1gZ8").strip()
-MONGODB_URI = os.getenv("MONGODB_URI", "mongodb+srv://javacodex1_db_user:javohir@cluster0.ftgcf62.mongodb.net/cpm_store").strip()
+BOT_TOKEN = os.getenv("BOT_TOKEN", "").strip()
+MONGODB_URI = os.getenv("MONGODB_URI", "").strip()
 if not BOT_TOKEN or not MONGODB_URI:
     raise RuntimeError("BOT_TOKEN va MONGODB_URI .env faylida kerak")
 OWNER_ID = int(os.getenv("OWNER_ID", "0") or 0)
-ADMIN_IDS = {int(x) for x in re.split(r"[,\s]+", os.getenv("ADMIN_IDS", "6968399046")) if x.isdigit()}
+ADMIN_IDS = {int(x) for x in re.split(r"[,\s]+", os.getenv("ADMIN_IDS", "")) if x.isdigit()}
 if OWNER_ID: ADMIN_IDS.add(OWNER_ID)
 DB = MongoClient(MONGODB_URI, serverSelectionTimeoutMS=8000)[os.getenv("MONGODB_DB", "cpm_store")]
 users, products, stock, orders, free_grants = (DB[x] for x in ("users", "products", "stock", "orders", "free_grants"))

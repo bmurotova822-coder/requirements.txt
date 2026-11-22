@@ -119,15 +119,26 @@ def configured_subscription():
     channels=configured_subscriptions()
     return (channels[0]["chat_id"],channels[0]["url"] or "") if channels else ("","")
 
-def has_subscription(uid):
-    for channel in configured_subscriptions():
+def subscription_status(uid):
+    """Return (ok, diagnostic lines) so channel permission/config errors are visible to admins."""
+    channels=configured_subscriptions()
+    if not channels: return True,["Majburiy obuna o‘chiq yoki kanal sozlanmagan."]
+    diagnostics=[]; all_joined=True
+    for channel in channels:
         try:
             member=bot.get_chat_member(channel["chat_id"],uid)
-            if not (member.status in ("member","administrator","creator") or (member.status=="restricted" and member.is_member)): return False
-        except Exception:
+            joined=member.status in ("member","administrator","creator") or (member.status=="restricted" and member.is_member)
+            diagnostics.append(f"{channel['title']}: {member.status} — {'✅ obuna bor' if joined else '❌ obuna yo‘q'}")
+            if not joined: all_joined=False
+        except Exception as exc:
+            all_joined=False
+            reason=str(exc).replace("<","[").replace(">","]")[:350]
+            diagnostics.append(f"{channel['title']}: ❌ Telegram tekshira olmadi ({reason})")
             app.logger.exception("Subscription check failed for %s",channel["chat_id"])
-            return False
-    return True
+    return all_joined,diagnostics
+
+def has_subscription(uid):
+    return subscription_status(uid)[0]
 def subscription_prompt(chat,uid):
     channels=configured_subscriptions()
     if not channels:
@@ -197,6 +208,7 @@ def admin_panel(chat):
     for p in PRODUCTS: kb.add(inline_btn(f"⚙️ {p}",callback_data=f"adm:product:{p}"))
     kb.row(inline_btn("🧾 Kutayotgan buyurtmalar",callback_data="adm:pending"),inline_btn("📊 Statistika",callback_data="adm:stats"))
     kb.add(inline_btn("📢 Majburiy obuna",callback_data="adm:sub"))
+    kb.add(inline_btn("🔎 Obunani tekshirish",callback_data="adm:testsub"))
     kb.add(inline_btn("📣 Foydalanuvchilarga xabar",callback_data="adm:broadcast"))
     bot.send_message(chat,"<b>⚙️ Admin panel</b>\nMahsulot kartasi, narx, обзор видео, захира ва махсус функцияларни бошқаринг.",reply_markup=kb)
 
@@ -384,6 +396,13 @@ def callbacks(c):
                 execute_broadcast(chat,uid); return
             sessions[uid]={"step":"broadcast_input"}
             bot.send_message(chat,"Foydalanuvchilarga yuboriladigan xabarni jo‘nating. Matn, rasm, video, fayl, audio va boshqa Telegram xabar turlari mumkin. Bekor qilish: /cancel")
+            return
+        if action=="testsub":
+            channels=configured_subscriptions()
+            if not channels:
+                bot.send_message(chat,"Majburiy obuna sozlanmagan yoki o‘chiq. Admin → Majburiy obuna bo‘limida kanal qo‘shing."); return
+            ok,lines=subscription_status(uid)
+            bot.send_message(chat,"<b>Majburiy obuna diagnostikasi</b>\n"+"\n".join(esc(line,500) for line in lines)+("\n\n✅ Tekshiruv muvaffaqiyatli." if ok else "\n\n❌ Bot kanalga administrator sifatida qo‘shilganini va kanal ID/username to‘g‘riligini tekshiring."))
             return
         if action=="pending":
             rows=list(orders.find({"status":"pending_admin"}).sort("created_at",1).limit(20))

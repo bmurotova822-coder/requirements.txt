@@ -1,31 +1,16 @@
 """CPM account store: Telegram webhook + Flask + MongoDB + Stars."""
 from __future__ import annotations
 
-import os, re, secrets
+import os, re, secrets, time
 from datetime import datetime, timezone, timedelta
 from html import escape
 from urllib.parse import urlparse
 
-try:
-    import telebot
-except ModuleNotFoundError as exc:
-    if exc.name != "telebot":
-        raise
-    # Last-resort startup recovery for hosts that run the start command but
-    # skipped the configured build step. Normal deployment installs from
-    # requirements.txt during the build.
-    import subprocess
-    import sys
-    subprocess.check_call([
-        sys.executable, "-m", "pip", "install", "--no-cache-dir",
-        "pyTelegramBotAPI==4.37.0",
-    ])
-    import telebot
+import telebot
 try:
     from dotenv import load_dotenv
 except ImportError:
-    # Render injects environment variables directly. python-dotenv is only
-    # needed for local .env.cpm_store development, so it must not block startup.
+    # Render injects environment variables directly; dotenv is for local runs.
     def load_dotenv(*args, **kwargs):
         return False
 from flask import Flask, abort, jsonify, request
@@ -106,40 +91,53 @@ def language_prompt(chat):
     kb=types.InlineKeyboardMarkup(row_width=1)
     for code,label in LANGS.items(): kb.add(inline_btn(label, callback_data=f"lang:{code}"))
     bot.send_message(chat,T["uz"]["choose"],reply_markup=kb)
-def configured_subscription():
-    """Return an explicitly enabled subscription channel, or empty when disabled.
-
-    Legacy Mongo records created before the `enabled` flag are deliberately ignored;
-    they must not unexpectedly force users to subscribe after a code update.
-    """
+def configured_subscriptions():
+    """Return all explicitly enabled mandatory channels (supports old one-channel config)."""
     settings=DB.settings.find_one({"_id":"main"})
     if settings is not None:
-        if settings.get("enabled") is not True:
-            return "", ""
-        channel=(settings.get("channel") or "").strip()
-        url=(settings.get("url") or "").strip()
+        if settings.get("enabled") is not True: return []
+        configured=settings.get("channels")
+        if not configured:
+            configured=[{"chat_id":settings.get("channel", ""),"url":settings.get("url", "")}]
     else:
-        channel=(os.getenv("FORCE_SUB_CHANNEL", "") or "").strip()
-        url=(os.getenv("FORCE_SUB_URL", "") or "").strip()
-    if channel.lower().lstrip("@") in {"your_channel", "example", "placeholder", "none", "off"}:
-        return "", ""
-    return channel, url
+        raw=(os.getenv("FORCE_SUB_CHANNEL", "") or "").strip()
+        link=(os.getenv("FORCE_SUB_URL", "") or "").strip()
+        configured=[{"chat_id":x.strip(),"url":link if i==0 else ""} for i,x in enumerate(raw.split(",")) if x.strip()]
+    result=[]; seen=set()
+    for item in configured:
+        if isinstance(item,str): item={"chat_id":item}
+        channel=str(item.get("chat_id") or item.get("channel") or "").strip()
+        if not channel or channel.lower().lstrip("@") in {"your_channel","example","placeholder","none","off"} or channel in seen: continue
+        link=str(item.get("url") or "").strip()
+        if not link and channel.startswith("@"): link=f"https://t.me/{channel[1:]}"
+        result.append({"chat_id":channel,"url":button_url(link),"title":str(item.get("title") or channel)})
+        seen.add(channel)
+    return result
+
+def configured_subscription():
+    """Compatibility helper for callers that still expect one channel."""
+    channels=configured_subscriptions()
+    return (channels[0]["chat_id"],channels[0]["url"] or "") if channels else ("","")
 
 def has_subscription(uid):
-    channel, _ = configured_subscription()
-    if not channel: return True
-    try:
-        member=bot.get_chat_member(channel,uid)
-        return member.status in ("member","administrator","creator") or (member.status=="restricted" and member.is_member)
-    except Exception: return False
+    for channel in configured_subscriptions():
+        try:
+            member=bot.get_chat_member(channel["chat_id"],uid)
+            if not (member.status in ("member","administrator","creator") or (member.status=="restricted" and member.is_member)): return False
+        except Exception:
+            app.logger.exception("Subscription check failed for %s",channel["chat_id"])
+            return False
+    return True
 def subscription_prompt(chat,uid):
-    channel, url = configured_subscription()
-    if not channel:
+    channels=configured_subscriptions()
+    if not channels:
         bot.send_message(chat,tr(uid,"menu"),reply_markup=main_kb(uid)); return
-    kb=types.InlineKeyboardMarkup()
-    if button_url(url): kb.add(inline_btn("📢 Kanalga obuna",url=url))
+    kb=types.InlineKeyboardMarkup(row_width=1)
+    for channel in channels:
+        label=channel["title"]
+        kb.add(inline_btn(f"📢 {label} ga obuna bo‘lish",url=channel["url"]) if channel["url"] else inline_btn(f"📢 {label} (havola admin tomonidan kiritilmagan)",callback_data="sub:link_missing"))
     kb.add(inline_btn(tr(uid,"check"),callback_data="sub:check"))
-    bot.send_message(chat,tr(uid,"sub"),reply_markup=kb)
+    bot.send_message(chat,tr(uid,"sub")+"\n\nQuyidagi kanallarning barchasiga obuna bo‘ling:",reply_markup=kb)
 def list_products(chat,uid):
     kb=types.InlineKeyboardMarkup(row_width=1)
     for name in PRODUCTS:
@@ -172,6 +170,8 @@ def text_handler(m):
     uid=m.from_user.id; val=(m.text or "").strip(); state=sessions.get(uid)
     # Admins may also buy products. Their quantity input belongs to the shopper
     # flow, not the admin wizard; don't consume it as an admin-panel response.
+    if state and admin(uid) and state.get("step")=="broadcast_input":
+        prepare_broadcast(m); return
     if state and admin(uid) and state.get("step")!="quantity": admin_text(m,state); return
     if not (users.find_one({"_id":uid},{"lang":1}) or {}).get("lang"): language_prompt(m.chat.id); return
     if not has_subscription(uid): subscription_prompt(m.chat.id,uid); return
@@ -197,7 +197,32 @@ def admin_panel(chat):
     for p in PRODUCTS: kb.add(inline_btn(f"⚙️ {p}",callback_data=f"adm:product:{p}"))
     kb.row(inline_btn("🧾 Kutayotgan buyurtmalar",callback_data="adm:pending"),inline_btn("📊 Statistika",callback_data="adm:stats"))
     kb.add(inline_btn("📢 Majburiy obuna",callback_data="adm:sub"))
+    kb.add(inline_btn("📣 Foydalanuvchilarga xabar",callback_data="adm:broadcast"))
     bot.send_message(chat,"<b>⚙️ Admin panel</b>\nMahsulot kartasi, narx, обзор видео, захира ва махсус функцияларни бошқаринг.",reply_markup=kb)
+
+def prepare_broadcast(m):
+    uid=m.from_user.id
+    sessions[uid]={"step":"broadcast_confirm","source_chat_id":m.chat.id,"source_message_id":m.message_id}
+    kb=types.InlineKeyboardMarkup(row_width=2)
+    kb.row(inline_btn("✅ Yuborish",callback_data="adm:broadcast:send",style="success"),inline_btn("❌ Bekor qilish",callback_data="adm:broadcast:cancel",style="danger"))
+    bot.send_message(m.chat.id,f"Ko‘rsatilgan xabar {users.count_documents({})} ta foydalanuvchiga nusxa qilib yuboriladi. Davom etamizmi?",reply_markup=kb)
+
+def execute_broadcast(admin_chat,uid):
+    state=sessions.get(uid) or {}
+    if state.get("step")!="broadcast_confirm":
+        bot.send_message(admin_chat,"Tarqatish xabari topilmadi. Qaytadan boshlang."); return
+    recipients=users.find({}, {"_id":1})
+    sent=failed=0
+    for recipient in recipients:
+        try:
+            bot.copy_message(int(recipient["_id"]),state["source_chat_id"],state["source_message_id"])
+            sent+=1
+        except Exception:
+            failed+=1
+            app.logger.info("Broadcast failed for user %s",recipient.get("_id"))
+        time.sleep(0.04)
+    sessions.pop(uid,None)
+    bot.send_message(admin_chat,f"Tarqatish yakunlandi. Yetkazildi: {sent}; yetkazilmadi: {failed}.")
 def admin_text(m,s):
     uid=m.from_user.id; val=(m.text or "").strip(); step=s["step"]
     if val=="/cancel": sessions.pop(uid,None); admin_panel(m.chat.id); return
@@ -209,10 +234,27 @@ def admin_text(m,s):
         bot.send_message(m.chat.id,"Video fayl yuboring yoki /skip."); return
     if step=="description": products.update_one({"_id":s["product"]},{"$set":{"description":val}},upsert=True); sessions.pop(uid,None); bot.send_message(m.chat.id,"Tavsif saqlandi."); return
     if step=="sub":
-        parts=val.split(); channel=parts[0] if parts and parts[0].lower() not in ("off","o‘chirish","ochirish") else ""
-        url=parts[1] if len(parts)>1 else ("https://t.me/"+channel.lstrip("@") if channel.startswith("@") else "")
-        DB.settings.update_one({"_id":"main"},{"$set":{"channel":channel,"url":url,"enabled":bool(channel)}},upsert=True); os.environ["FORCE_SUB_CHANNEL"]=channel; os.environ["FORCE_SUB_URL"]=url
-        sessions.pop(uid,None); bot.send_message(m.chat.id,"Majburiy obuna sozlandi."); return
+        if val.lower() in ("off","o‘chirish","ochirish"):
+            DB.settings.update_one({"_id":"main"},{"$set":{"channels":[],"channel":"","url":"","enabled":False}},upsert=True)
+            sessions.pop(uid,None); bot.send_message(m.chat.id,"Majburiy obuna o‘chirildi."); return
+        channels=[]; invalid=[]
+        for line_no,line in enumerate(val.splitlines(),1):
+            line=line.strip()
+            if not line: continue
+            bits=[x.strip() for x in line.split("|",2)]
+            channel=bits[0]
+            link=bits[1] if len(bits)>1 else (f"https://t.me/{channel[1:]}" if channel.startswith("@") else "")
+            if not (channel.startswith("@") or re.fullmatch(r"-?\d{5,20}",channel)):
+                invalid.append(str(line_no)); continue
+            valid_link=button_url(link)
+            if not valid_link:
+                invalid.append(str(line_no)); continue
+            channels.append({"chat_id":channel,"url":valid_link,"title":bits[2] if len(bits)>2 and bits[2] else channel})
+        if invalid or not channels:
+            bot.send_message(m.chat.id,"Kanal formatini tekshiring. Har qator: @username | https://t.me/username | Ko‘rinadigan nom\nYopiq kanal uchun: -1001234567890 | https://t.me/+taklifhavola | Kanal nomi\nBir nechta kanalni alohida qatorlarda yuboring. O‘chirish: off")
+            return
+        DB.settings.update_one({"_id":"main"},{"$set":{"channels":channels,"channel":channels[0]["chat_id"],"url":channels[0]["url"],"enabled":True}},upsert=True)
+        sessions.pop(uid,None); bot.send_message(m.chat.id,f"Majburiy obuna saqlandi: {len(channels)} ta kanal. Botni har bir kanalga administrator qilib qo‘ying."); return
     if step=="add_stock":
         added=0; invalid=[]
         for line_no,line in enumerate(val.splitlines(),1):
@@ -233,16 +275,21 @@ def admin_text(m,s):
         else:
             free_grants.delete_one({"user_id":target,"product_id":s["product"]}); bot.send_message(m.chat.id,"Bepul huquq o‘chirildi.")
         sessions.pop(uid,None)
-@bot.message_handler(content_types=["video"])
+@bot.message_handler(content_types=["photo","video","document","audio","voice","animation","sticker","video_note","location","contact","venue","poll","dice"])
 def media(m):
     s=sessions.get(m.from_user.id)
+    if s and admin(m.from_user.id) and s.get("step")=="broadcast_input":
+        prepare_broadcast(m); return
     if s and admin(m.from_user.id) and s.get("step")=="video":
+        if not getattr(m,"video",None):
+            bot.reply_to(m,"Video yuboring yoki /skip yozing."); return
         products.update_one({"_id":s["product"]},{"$set":{"video_file_id":m.video.file_id}},upsert=True); sessions.pop(m.from_user.id,None); bot.reply_to(m,"Video обзор saqlandi.")
 @bot.callback_query_handler(func=lambda c:True)
 def callbacks(c):
     uid=c.from_user.id; data=c.data or ""; chat=c.message.chat.id
-    try: bot.answer_callback_query(c.id)
-    except Exception: app.logger.exception("Could not answer callback query")
+    if data!="sub:link_missing":
+        try: bot.answer_callback_query(c.id)
+        except Exception: app.logger.exception("Could not answer callback query")
     if data.startswith("lang:"):
         lang=data.split(":",1)[1]
         if lang not in LANGS:return
@@ -252,8 +299,12 @@ def callbacks(c):
         return
     if data=="sub:check":
         if has_subscription(uid): bot.send_message(chat,tr(uid,"menu"),reply_markup=main_kb(uid))
-        else: bot.send_message(chat,tr(uid,"not_sub"))
+        else:
+            bot.send_message(chat,tr(uid,"not_sub"))
+            subscription_prompt(chat,uid)
         return
+    if data=="sub:link_missing":
+        bot.answer_callback_query(c.id,"Kanal havolasi admin tomonidan sozlanmagan.",show_alert=True); return
     if not admin(uid) and (not users.find_one({"_id":uid}) or not users.find_one({"_id":uid}).get("lang")):
         language_prompt(chat); return
     if not admin(uid) and not has_subscription(uid):
@@ -326,6 +377,14 @@ def callbacks(c):
     if data.startswith("adm:"):
         if not admin(uid):return
         _,action,*args=data.split(":")
+        if action=="broadcast":
+            if args and args[0]=="cancel":
+                sessions.pop(uid,None); bot.send_message(chat,"Tarqatish bekor qilindi."); return
+            if args and args[0]=="send":
+                execute_broadcast(chat,uid); return
+            sessions[uid]={"step":"broadcast_input"}
+            bot.send_message(chat,"Foydalanuvchilarga yuboriladigan xabarni jo‘nating. Matn, rasm, video, fayl, audio va boshqa Telegram xabar turlari mumkin. Bekor qilish: /cancel")
+            return
         if action=="pending":
             rows=list(orders.find({"status":"pending_admin"}).sort("created_at",1).limit(20))
             if not rows: bot.send_message(chat,"Kutayotgan to‘lov so‘rovlari yo‘q."); return
@@ -345,7 +404,7 @@ def callbacks(c):
             prompts={"price":"Yangi Stars narxini yuboring:","video":"Akkaunt обзор videosini yuboring (yoki /skip):","desc":"Yangi tavsifni yuboring:","add_stock":"Gmail va parolni alohida qatorda yuboring:\nemail@gmail.com\nparol","free":"Bir martalik bepul akkaunt oladigan foydalanuvchining Telegram ID sini yuboring:","unfree":"Bepul huquqi o‘chiriladigan foydalanuvchining Telegram ID sini yuboring:"}
             if step=="add_stock": prompts[step]="Har bir akkauntni bitta qatorda kiriting:\n02 | email@gmail.com | parol | OK\nTartib: kod | Gmail | parol | holati/izoh. Bir xabarda bir nechta akkaunt qo‘shish mumkin."
             bot.send_message(chat,prompts[step]); return
-        if action=="sub": sessions[uid]={"step":"sub"}; bot.send_message(chat,"Kanal username yoki ID va ixtiyoriy havolani yuboring:\n@kanal https://t.me/kanal\nO‘chirish uchun off"); return
+        if action=="sub": sessions[uid]={"step":"sub"}; bot.send_message(chat,"Majburiy obuna kanallarini har qatorga bittadan yuboring:\n@username | https://t.me/username | Kanal nomi\nYopiq kanal: -1001234567890 | https://t.me/+taklifhavola | Kanal nomi\nBot har bir kanalga administrator bo‘lishi kerak. O‘chirish uchun off yuboring."); return
         if action in ("free","unfree"):return
 def deliver(oid,chat_id):
     o=orders.find_one_and_update({"_id":oid,"status":{"$in":["paid","delivered"]},"delivery_started":{"$ne":True}},

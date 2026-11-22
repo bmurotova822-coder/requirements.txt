@@ -1,7 +1,7 @@
 """CPM account store: Telegram webhook + Flask + MongoDB + Stars."""
 from __future__ import annotations
 
-import os, re, secrets, time
+import os, re, secrets, time, threading
 from datetime import datetime, timezone, timedelta
 from html import escape
 from urllib.parse import urlparse
@@ -28,6 +28,7 @@ if OWNER_ID: ADMIN_IDS.add(OWNER_ID)
 DB = MongoClient(MONGODB_URI, serverSelectionTimeoutMS=8000)[os.getenv("MONGODB_DB", "cpm_store")]
 users, products, stock, orders, free_grants = (DB[x] for x in ("users", "products", "stock", "orders", "free_grants"))
 bot_sessions = DB.bot_sessions
+polling_locks = DB.polling_locks
 orders.create_index("payload", unique=True, sparse=True)
 orders.create_index([("user_id", 1), ("created_at", -1)])
 stock.create_index([("product_id", 1), ("status", 1)])
@@ -51,6 +52,45 @@ class MongoSessionStore:
     def pop(self, user_id, default=None):
         return bot_sessions.find_one_and_delete({"_id":int(user_id)}) or default
 sessions=MongoSessionStore()
+
+def acquire_polling_lock(owner):
+    """Serialize polling across Render instances that share this Mongo database."""
+    lock_id="telegram_get_updates"
+    while True:
+        expiry=now()+timedelta(seconds=120)
+        try:
+            lock=polling_locks.find_one_and_update(
+                {"_id":lock_id,"expires_at":{"$lte":now()}},
+                {"$set":{"owner":owner,"expires_at":expiry}},
+                return_document=ReturnDocument.AFTER,
+            )
+            if lock and lock.get("owner")==owner: return
+            try:
+                polling_locks.insert_one({"_id":lock_id,"owner":owner,"expires_at":expiry})
+                return
+            except Exception as exc:
+                # A duplicate _id means another process owns the lease. Other DB
+                # errors are logged, then retried rather than starting unguarded.
+                if exc.__class__.__name__!="DuplicateKeyError":
+                    app.logger.exception("Could not acquire Telegram polling lock")
+        except Exception:
+            app.logger.exception("Could not check Telegram polling lock")
+        app.logger.warning("Another instance owns Telegram polling; waiting for its lease")
+        time.sleep(5)
+
+def keep_polling_lock(owner, stop_event):
+    while not stop_event.wait(30):
+        try:
+            result=polling_locks.update_one(
+                {"_id":"telegram_get_updates","owner":owner},
+                {"$set":{"expires_at":now()+timedelta(seconds=120)}}
+            )
+            if result.matched_count!=1:
+                app.logger.critical("Telegram polling lock was lost; stopping this poller")
+                bot.stop_polling()
+                return
+        except Exception:
+            app.logger.exception("Could not renew Telegram polling lock")
 PRODUCTS = ["CPM1 VINIL AKK", "CPM1 FULL AKK", "CPM1 ANIME AKK", "CPM1 HD LOGO AKK"]
 LANGS = {"uz": "🇺🇿 O‘zbekcha", "ru": "🇷🇺 Русский", "en": "🇬🇧 English"}
 T = {
@@ -477,8 +517,17 @@ if __name__ == "__main__":
     mode=os.getenv("BOT_MODE", "polling").strip().lower()
     if mode == "polling":
         # Local development: direct Telegram polling doesn't require a public HTTPS endpoint.
-        bot.remove_webhook()
-        bot.infinity_polling(timeout=60, long_polling_timeout=60, skip_pending=True)
+        poller_id=secrets.token_hex(16)
+        acquire_polling_lock(poller_id)
+        lock_stop=threading.Event()
+        lock_thread=threading.Thread(target=keep_polling_lock,args=(poller_id,lock_stop),daemon=True)
+        lock_thread.start()
+        try:
+            bot.remove_webhook()
+            bot.infinity_polling(timeout=60, long_polling_timeout=60, skip_pending=True)
+        finally:
+            lock_stop.set()
+            polling_locks.delete_one({"_id":"telegram_get_updates","owner":poller_id})
     else:
         # Production webhook: configure using `flask --app cpm_store_bot set-webhook`.
         app.run(host="0.0.0.0",port=int(os.getenv("PORT","5000")),debug=False)

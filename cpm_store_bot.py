@@ -1,0 +1,386 @@
+"""CPM account store: Telegram webhook + Flask + MongoDB + Stars."""
+from __future__ import annotations
+
+import os, re, secrets
+from datetime import datetime, timezone, timedelta
+from html import escape
+from urllib.parse import urlparse
+
+import telebot
+from dotenv import load_dotenv
+from flask import Flask, abort, jsonify, request
+from pymongo import MongoClient, ReturnDocument
+from telebot import types
+
+load_dotenv(".env.cpm_store")
+BOT_TOKEN = os.getenv("BOT_TOKEN", "9000034167:AAGibXV0h9wRmhFyB845xde7x8GDmjj1gZ8").strip()
+MONGODB_URI = os.getenv("MONGODB_URI", "mongodb+srv://javacodex1_db_user:javohir@cluster0.ftgcf62.mongodb.net/cpm_store").strip()
+if not BOT_TOKEN or not MONGODB_URI:
+    raise RuntimeError("BOT_TOKEN va MONGODB_URI .env faylida kerak")
+OWNER_ID = int(os.getenv("OWNER_ID", "0") or 0)
+ADMIN_IDS = {int(x) for x in re.split(r"[,\s]+", os.getenv("ADMIN_IDS", "6968399046")) if x.isdigit()}
+if OWNER_ID: ADMIN_IDS.add(OWNER_ID)
+DB = MongoClient(MONGODB_URI, serverSelectionTimeoutMS=8000)[os.getenv("MONGODB_DB", "cpm_store")]
+users, products, stock, orders, free_grants = (DB[x] for x in ("users", "products", "stock", "orders", "free_grants"))
+bot_sessions = DB.bot_sessions
+orders.create_index("payload", unique=True, sparse=True)
+orders.create_index([("user_id", 1), ("created_at", -1)])
+stock.create_index([("product_id", 1), ("status", 1)])
+free_grants.create_index([("user_id", 1), ("product_id", 1)], unique=True)
+bot_sessions.create_index("expires_at", expireAfterSeconds=0)
+bot = telebot.TeleBot(BOT_TOKEN, parse_mode="HTML", threaded=True)
+app = Flask(__name__)
+class MongoSessionStore:
+    """Small dict-like session store shared safely by polling/web workers."""
+    def get(self, user_id, default=None):
+        doc=bot_sessions.find_one({"_id":int(user_id),"expires_at":{"$gt":now()}})
+        if not doc: return default
+        doc.pop("_id",None); doc.pop("expires_at",None)
+        return doc
+    def __setitem__(self, user_id, state):
+        doc=dict(state); doc["_id"]=int(user_id); doc["expires_at"]=now()+timedelta(hours=24)
+        bot_sessions.replace_one({"_id":int(user_id)},doc,upsert=True)
+    def update(self, user_id, fields):
+        changes=dict(fields); changes["expires_at"]=now()+timedelta(hours=24)
+        bot_sessions.update_one({"_id":int(user_id)},{"$set":changes},upsert=True)
+    def pop(self, user_id, default=None):
+        return bot_sessions.find_one_and_delete({"_id":int(user_id)}) or default
+sessions=MongoSessionStore()
+PRODUCTS = ["CPM1 VINIL AKK", "CPM1 FULL AKK", "CPM1 ANIME AKK", "CPM1 HD LOGO AKK"]
+LANGS = {"uz": "🇺🇿 O‘zbekcha", "ru": "🇷🇺 Русский", "en": "🇬🇧 English"}
+T = {
+"uz": {"choose": "Tilni tanlang:", "menu": "Asosiy menyu", "buy": "🛍 Mahsulotlar", "orders": "📦 Buyurtmalarim", "admin": "⚙️ Admin panel", "sub": "Davom etish uchun kanalga obuna bo‘ling, keyin Tekshirish tugmasini bosing.", "check": "✅ Tekshirish", "not_sub": "Kanalga obuna topilmadi. Obuna bo‘lib qayta tekshiring.", "quantity": "Nechta akkaunt kerak? Miqdorni son bilan yuboring:", "purchase": "Sotib olasizmi?", "yes": "✅ HA", "no": "❌ YO‘Q", "pay": "TO‘LOV TURINI TANLANG", "adminpay": "👤 ADMIN ORQALI", "stars": "⭐ STARS ORQALI", "empty": "Hozircha mahsulot yo‘q.", "orders_empty": "Buyurtmalaringiz yo‘q."},
+"ru": {"choose": "Выберите язык:", "menu": "Главное меню", "buy": "🛍 Товары", "orders": "📦 Мои заказы", "admin": "⚙️ Панель администратора", "sub": "Подпишитесь на канал и нажмите Проверить.", "check": "✅ Проверить", "not_sub": "Подписка не найдена.", "quantity": "Сколько аккаунтов нужно? Отправьте число:", "purchase": "Покупаете?", "yes": "✅ ДА", "no": "❌ НЕТ", "pay": "ВЫБЕРИТЕ СПОСОБ ОПЛАТЫ", "adminpay": "👤 ЧЕРЕЗ АДМИНА", "stars": "⭐ ЧЕРЕЗ STARS", "empty": "Товаров пока нет.", "orders_empty": "Заказов нет."},
+"en": {"choose": "Choose a language:", "menu": "Main menu", "buy": "🛍 Products", "orders": "📦 My orders", "admin": "⚙️ Admin panel", "sub": "Subscribe to the channel, then tap Check.", "check": "✅ Check", "not_sub": "Channel subscription not found.", "quantity": "How many accounts do you need? Send a number:", "purchase": "Would you like to buy?", "yes": "✅ YES", "no": "❌ NO", "pay": "CHOOSE PAYMENT METHOD", "adminpay": "👤 VIA ADMIN", "stars": "⭐ VIA STARS", "empty": "No products yet.", "orders_empty": "No orders yet."}}
+def now(): return datetime.now(timezone.utc)
+def tr(uid, key): return T.get(users.find_one({"_id": uid}, {"lang": 1}).get("lang", "uz") if users.find_one({"_id": uid}) else "uz", T["uz"])[key]
+def esc(v, n=1200): return escape(str(v or "")[:n])
+def admin(uid): return uid in ADMIN_IDS
+def button_url(value):
+    """Turn a public Telegram username into a URL and reject malformed link values."""
+    value=(value or "").strip()
+    if not value: return None
+    if value.startswith("tg://"):
+        return value if urlparse(value).scheme=="tg" else None
+    if value.startswith(("https://", "http://")):
+        parsed=urlparse(value)
+        return value if parsed.scheme in ("https", "http") and parsed.netloc and not any(ch.isspace() for ch in value) else None
+    username=value.lstrip("@").strip()
+    if re.fullmatch(r"[A-Za-z0-9_]{5,32}", username):
+        return f"https://t.me/{username}"
+    return None
+def inline_btn(text, callback_data=None, url=None, style=None):
+    if style is None:
+        data = callback_data or ""
+        style = "success" if data in ("confirm:yes", "sub:check") or data.startswith("approve:") else (
+            "danger" if data in ("confirm:no",) or data.startswith("reject:") or data.startswith("adm:unfree:") else "primary")
+    return types.InlineKeyboardButton(text=text, callback_data=callback_data, url=button_url(url), style=style)
+def reply_btn(text, style="primary"):
+    return types.KeyboardButton(text=text, style=style)
+def main_kb(uid):
+    kb=types.ReplyKeyboardMarkup(resize_keyboard=True)
+    kb.row(reply_btn(tr(uid,"buy"),"success"),reply_btn(tr(uid,"orders"),"primary"))
+    if admin(uid): kb.add(reply_btn(tr(uid,"admin"),"primary"))
+    return kb
+def language_prompt(chat):
+    kb=types.InlineKeyboardMarkup(row_width=1)
+    for code,label in LANGS.items(): kb.add(inline_btn(label, callback_data=f"lang:{code}"))
+    bot.send_message(chat,T["uz"]["choose"],reply_markup=kb)
+def configured_subscription():
+    """Return an explicitly enabled subscription channel, or empty when disabled.
+
+    Legacy Mongo records created before the `enabled` flag are deliberately ignored;
+    they must not unexpectedly force users to subscribe after a code update.
+    """
+    settings=DB.settings.find_one({"_id":"main"})
+    if settings is not None:
+        if settings.get("enabled") is not True:
+            return "", ""
+        channel=(settings.get("channel") or "").strip()
+        url=(settings.get("url") or "").strip()
+    else:
+        channel=(os.getenv("FORCE_SUB_CHANNEL", "") or "").strip()
+        url=(os.getenv("FORCE_SUB_URL", "") or "").strip()
+    if channel.lower().lstrip("@") in {"your_channel", "example", "placeholder", "none", "off"}:
+        return "", ""
+    return channel, url
+
+def has_subscription(uid):
+    channel, _ = configured_subscription()
+    if not channel: return True
+    try:
+        member=bot.get_chat_member(channel,uid)
+        return member.status in ("member","administrator","creator") or (member.status=="restricted" and member.is_member)
+    except Exception: return False
+def subscription_prompt(chat,uid):
+    channel, url = configured_subscription()
+    if not channel:
+        bot.send_message(chat,tr(uid,"menu"),reply_markup=main_kb(uid)); return
+    kb=types.InlineKeyboardMarkup()
+    if button_url(url): kb.add(inline_btn("📢 Kanalga obuna",url=url))
+    kb.add(inline_btn(tr(uid,"check"),callback_data="sub:check"))
+    bot.send_message(chat,tr(uid,"sub"),reply_markup=kb)
+def list_products(chat,uid):
+    kb=types.InlineKeyboardMarkup(row_width=1)
+    for name in PRODUCTS:
+        p=products.find_one({"_id":name}) or {"price":0,"video_file_id":None}
+        amount=stock.count_documents({"product_id":name,"status":"available"})
+        kb.add(inline_btn(f"{name} · {int(p.get('price',0))}⭐ · {amount} ta",callback_data=f"item:{name}"))
+    bot.send_message(chat,"Mahsulotni tanlang:",reply_markup=kb)
+def send_item(chat,p):
+    caption=f"<b>{esc(p['_id'])}</b>\n\n{esc(p.get('description') or 'Akkaunt video abzori') }\n\nNarxi: <b>{int(p.get('price',0))} ⭐ / dona</b>"
+    if p.get("video_file_id"): bot.send_video(chat,p["video_file_id"],caption=caption)
+    else: bot.send_message(chat,caption)
+@bot.message_handler(commands=["start","help"])
+def start(m):
+    uid=m.from_user.id
+    users.update_one({"_id":uid},{"$set":{"username":m.from_user.username,"first_name":m.from_user.first_name,"updated_at":now()},"$setOnInsert":{"created_at":now()}},upsert=True)
+    u=users.find_one({"_id":uid})
+    if not u or not u.get("lang"):
+        language_prompt(m.chat.id)
+        return
+    if not has_subscription(uid): subscription_prompt(m.chat.id,uid); return
+    bot.send_message(m.chat.id,tr(uid,"menu"),reply_markup=main_kb(uid))
+@bot.message_handler(commands=["admin"])
+def admin_cmd(m):
+    if admin(m.from_user.id): admin_panel(m.chat.id)
+    else: bot.reply_to(m,"Bu bo‘lim faqat egasi/admin uchun.")
+@bot.message_handler(commands=["cancel"])
+def cancel(m): sessions.pop(m.from_user.id,None); bot.send_message(m.chat.id,tr(m.from_user.id,"menu"),reply_markup=main_kb(m.from_user.id))
+@bot.message_handler(content_types=["text"])
+def text_handler(m):
+    uid=m.from_user.id; val=(m.text or "").strip(); state=sessions.get(uid)
+    # Admins may also buy products. Their quantity input belongs to the shopper
+    # flow, not the admin wizard; don't consume it as an admin-panel response.
+    if state and admin(uid) and state.get("step")!="quantity": admin_text(m,state); return
+    if not (users.find_one({"_id":uid},{"lang":1}) or {}).get("lang"): language_prompt(m.chat.id); return
+    if not has_subscription(uid): subscription_prompt(m.chat.id,uid); return
+    if val in (tr(uid,"buy"),"🛍 Mahsulotlar"): list_products(m.chat.id,uid)
+    elif val in (tr(uid,"orders"),"📦 Buyurtmalarim"):
+        rows=list(orders.find({"user_id":uid}).sort("created_at",-1).limit(20))
+        if not rows: bot.send_message(m.chat.id,tr(uid,"orders_empty"))
+        else:
+            out=[]
+            for o in rows:
+                created=o.get("created_at"); stamp=created.strftime("%d.%m.%Y %H:%M") if created else ""
+                out.append(f"• {esc(o['product_id'])} × {o['quantity']} — <b>{esc(o['status'])}</b> · {stamp}"+("\n"+"\n".join(f"<code>{esc(a,400)}</code>" for a in o.get("accounts",[])) if o.get("accounts") else ""))
+            bot.send_message(m.chat.id,"<b>📦 Buyurtmalarim</b>\n"+"\n\n".join(out))
+    elif val in (tr(uid,"admin"),"⚙️ Admin panel") and admin(uid): admin_panel(m.chat.id)
+    elif state and state.get("step")=="quantity":
+        if not val.isdigit() or not 1<=int(val)<=50: bot.send_message(m.chat.id,"1 dan 50 gacha butun son yuboring."); return
+        state["quantity"]=int(val); sessions.update(uid,{"quantity":int(val)}); kb=types.InlineKeyboardMarkup(); kb.row(inline_btn(tr(uid,"yes"),callback_data="confirm:yes"),inline_btn(tr(uid,"no"),callback_data="confirm:no"))
+        p=products.find_one({"_id":state["product_id"]}) or {"price":0}
+        bot.send_message(m.chat.id,f"{tr(uid,'purchase')}\n{esc(state['product_id'])} × {state['quantity']} — {int(p.get('price',0))*state['quantity']} ⭐",reply_markup=kb)
+    else: bot.send_message(m.chat.id,tr(uid,"menu"),reply_markup=main_kb(uid))
+def admin_panel(chat):
+    kb=types.InlineKeyboardMarkup(row_width=1)
+    for p in PRODUCTS: kb.add(inline_btn(f"⚙️ {p}",callback_data=f"adm:product:{p}"))
+    kb.row(inline_btn("🧾 Kutayotgan buyurtmalar",callback_data="adm:pending"),inline_btn("📊 Statistika",callback_data="adm:stats"))
+    kb.add(inline_btn("📢 Majburiy obuna",callback_data="adm:sub"))
+    bot.send_message(chat,"<b>⚙️ Admin panel</b>\nMahsulot kartasi, narx, обзор видео, захира ва махсус функцияларни бошқаринг.",reply_markup=kb)
+def admin_text(m,s):
+    uid=m.from_user.id; val=(m.text or "").strip(); step=s["step"]
+    if val=="/cancel": sessions.pop(uid,None); admin_panel(m.chat.id); return
+    if step=="price":
+        if not val.isdigit() or not 1<=int(val)<=100000: bot.send_message(m.chat.id,"Stars narxini musbat butun son kiriting."); return
+        products.update_one({"_id":s["product"]},{"$set":{"price":int(val)}},upsert=True); sessions.pop(uid,None); bot.send_message(m.chat.id,"Narx saqlandi."); return
+    if step=="video":
+        if val=="/skip": products.update_one({"_id":s["product"]},{"$set":{"video_file_id":None}},upsert=True); sessions.pop(uid,None); return
+        bot.send_message(m.chat.id,"Video fayl yuboring yoki /skip."); return
+    if step=="description": products.update_one({"_id":s["product"]},{"$set":{"description":val}},upsert=True); sessions.pop(uid,None); bot.send_message(m.chat.id,"Tavsif saqlandi."); return
+    if step=="sub":
+        parts=val.split(); channel=parts[0] if parts and parts[0].lower() not in ("off","o‘chirish","ochirish") else ""
+        url=parts[1] if len(parts)>1 else ("https://t.me/"+channel.lstrip("@") if channel.startswith("@") else "")
+        DB.settings.update_one({"_id":"main"},{"$set":{"channel":channel,"url":url,"enabled":bool(channel)}},upsert=True); os.environ["FORCE_SUB_CHANNEL"]=channel; os.environ["FORCE_SUB_URL"]=url
+        sessions.pop(uid,None); bot.send_message(m.chat.id,"Majburiy obuna sozlandi."); return
+    if step=="add_stock":
+        added=0; invalid=[]
+        for line_no,line in enumerate(val.splitlines(),1):
+            if not line.strip(): continue
+            parts=[x.strip() for x in line.split("|")]
+            if len(parts)<3 or not parts[0] or "@" not in parts[1] or not parts[2]: invalid.append(str(line_no)); continue
+            stock.insert_one({"product_id":s["product"],"account_code":parts[0],"email":parts[1],"password":parts[2],"extra":" | ".join(parts[3:]),"status":"available","created_at":now()}); added+=1
+        if added:
+            sessions.pop(uid,None); bot.send_message(m.chat.id,f"✅ {added} ta akkaunt zaxiraga qo‘shildi."+("\nFormat xato bo‘lgan qatorlar: "+", ".join(invalid) if invalid else "")); return
+        bot.send_message(m.chat.id,"Format xato. Har bir akkauntni bitta qatorda shu tartibda yuboring:\n02 | email@gmail.com | parol | OK\nBir xabarda bir nechta qator jo‘natish mumkin."); return
+    if step in ("free","unfree"):
+        try: target=int(val.split()[0])
+        except Exception: bot.send_message(m.chat.id,"Telegram ID raqamini birinchi yozing."); return
+        if step=="free":
+            pid=s["product"]
+            try: free_grants.update_one({"user_id":target,"product_id":pid},{"$setOnInsert":{"remaining":1,"created_at":now()}},upsert=True); bot.send_message(m.chat.id,f"Bir martalik bepul huquq berildi: {target}, {esc(pid)}")
+            except Exception: bot.send_message(m.chat.id,"Bu foydalanuvchiga bu mahsulot uchun huquq avval berilgan.")
+        else:
+            free_grants.delete_one({"user_id":target,"product_id":s["product"]}); bot.send_message(m.chat.id,"Bepul huquq o‘chirildi.")
+        sessions.pop(uid,None)
+@bot.message_handler(content_types=["video"])
+def media(m):
+    s=sessions.get(m.from_user.id)
+    if s and admin(m.from_user.id) and s.get("step")=="video":
+        products.update_one({"_id":s["product"]},{"$set":{"video_file_id":m.video.file_id}},upsert=True); sessions.pop(m.from_user.id,None); bot.reply_to(m,"Video обзор saqlandi.")
+@bot.callback_query_handler(func=lambda c:True)
+def callbacks(c):
+    uid=c.from_user.id; data=c.data or ""; chat=c.message.chat.id
+    try: bot.answer_callback_query(c.id)
+    except Exception: app.logger.exception("Could not answer callback query")
+    if data.startswith("lang:"):
+        lang=data.split(":",1)[1]
+        if lang not in LANGS:return
+        users.update_one({"_id":uid},{"$set":{"lang":lang}},upsert=True)
+        if not has_subscription(uid): subscription_prompt(chat,uid)
+        else: bot.send_message(chat,tr(uid,"menu"),reply_markup=main_kb(uid))
+        return
+    if data=="sub:check":
+        if has_subscription(uid): bot.send_message(chat,tr(uid,"menu"),reply_markup=main_kb(uid))
+        else: bot.send_message(chat,tr(uid,"not_sub"))
+        return
+    if not admin(uid) and (not users.find_one({"_id":uid}) or not users.find_one({"_id":uid}).get("lang")):
+        language_prompt(chat); return
+    if not admin(uid) and not has_subscription(uid):
+        subscription_prompt(chat,uid); return
+    if data.startswith("item:"):
+        pid=data[5:]
+        if pid not in PRODUCTS:return
+        p=products.find_one({"_id":pid}) or {"_id":pid,"price":0}
+        available=stock.count_documents({"product_id":pid,"status":"available"})
+        if available==0:
+            bot.send_message(chat,f"❌ <b>{esc(pid)}</b> hozircha qolmagan. Admin yangi akkaunt qo‘shgandan keyin qayta tanlang.")
+            for aid in ADMIN_IDS:
+                try: bot.send_message(aid,f"⚠️ Zaxira bo‘sh: {esc(pid)}. Yangi akkauntlar qo‘shing.")
+                except Exception: app.logger.exception("Could not notify admin about empty stock")
+            return
+        # Save the order step before sending any media. A missing/invalid video
+        # file_id must not leave the user with a dead product button.
+        sessions[uid]={"step":"quantity","product_id":pid}
+        try:
+            send_item(chat,p)
+        except Exception:
+            app.logger.exception("Product preview failed for %s",pid)
+            bot.send_message(chat,f"<b>{esc(pid)}</b>\nNarxi: {int(p.get('price',0))} ⭐ / dona\n\nVideo обзор hozircha ochilmadi.")
+        bot.send_message(chat,tr(uid,"quantity")); return
+    if data=="confirm:no": sessions.pop(uid,None); bot.send_message(chat,tr(uid,"menu"),reply_markup=main_kb(uid)); return
+    if data=="confirm:yes":
+        s=sessions.get(uid)
+        if not s or s.get("step")!="quantity": bot.send_message(chat,"Buyurtma eskirgan. Qaytadan boshlang."); return
+        kb=types.InlineKeyboardMarkup(); kb.row(inline_btn(tr(uid,"adminpay"),callback_data="pay:admin"),inline_btn(tr(uid,"stars"),callback_data="pay:stars",style="success"))
+        admin_profile=button_url(os.getenv("ADMIN_PROFILE_URL", "") or os.getenv("ADMIN_USERNAME", ""))
+        if admin_profile: kb.add(inline_btn("👤 Admin profili",url=admin_profile))
+        bot.send_message(chat,tr(uid,"pay"),reply_markup=kb); return
+    if data.startswith("pay:"):
+        if data not in ("pay:admin","pay:stars"): return
+        s=sessions.get(uid)
+        if not s or s.get("step")!="quantity": bot.send_message(chat,"Buyurtma eskirgan."); return
+        qty=s["quantity"]; pid=s["product_id"]; p=products.find_one({"_id":pid}) or {"price":0}
+        if stock.count_documents({"product_id":pid,"status":"available"})<qty:
+            bot.send_message(chat,"Zaxirada yetarli akkaunt yo‘q. Boshqa mahsulot tanlang yoki keyinroq urinib ko‘ring.")
+            for aid in ADMIN_IDS:
+                try: bot.send_message(aid,f"⚠️ Zaxira yetarli emas: {esc(pid)}; talab {qty} dona, mavjud {stock.count_documents({'product_id':pid,'status':'available'})} dona.")
+                except Exception: pass
+            return
+        grant=free_grants.find_one_and_update({"user_id":uid,"product_id":pid,"remaining":{"$gt":0}},{"$inc":{"remaining":-1}},return_document=ReturnDocument.BEFORE) if qty==1 else None
+        if grant:
+            order_id=secrets.token_hex(12); orders.insert_one({"_id":order_id,"user_id":uid,"product_id":pid,"quantity":1,"method":"free","status":"paid","created_at":now()})
+            deliver(order_id,chat); sessions.pop(uid,None); return
+        oid=secrets.token_hex(12); qty_available=stock.count_documents({"product_id":pid,"status":"available"})
+        if qty_available<qty: bot.send_message(chat,"Zaxirada yetarli akkaunt yo‘q."); return
+        order={"_id":oid,"user_id":uid,"product_id":pid,"quantity":qty,"method":data[4:],"price":int(p.get("price",0))*qty,"status":"pending_admin" if data=="pay:admin" else "pending_payment","created_at":now()}
+        if data=="pay:stars":
+            payload=f"cpm:{oid}:{secrets.token_urlsafe(8)}"; order["payload"]=payload; orders.insert_one(order)
+            bot.send_invoice(chat,title=pid[:32],description=f"{qty} akkaunt"[:255],invoice_payload=payload,provider_token="",currency="XTR",prices=[types.LabeledPrice(label=f"{pid} × {qty}"[:32],amount=order["price"])],start_parameter=f"cpm{oid}")
+        else:
+            orders.insert_one(order); kb=types.InlineKeyboardMarkup(); kb.row(inline_btn("✅ HA — tasdiqlash",callback_data=f"approve:{oid}"),inline_btn("❌ YO‘Q — rad etish",callback_data=f"reject:{oid}"))
+            name=users.find_one({"_id":uid}) or {}
+            for aid in ADMIN_IDS:
+                try: bot.send_message(aid,f"<b>To‘lov tasdiqlansinmi?</b>\n{esc(pid)} × {qty}\nFoydalanuvchi: {uid} @{esc(name.get('username',''))}\nNarx: {order['price']} ⭐",reply_markup=kb)
+                except Exception: pass
+            bot.send_message(chat,"So‘rovingiz adminga yuborildi. Tasdiqlanishini kuting.")
+        sessions.pop(uid,None); return
+    if data.startswith("approve:") or data.startswith("reject:"):
+        if not admin(uid):return
+        action,oid=data.split(":",1); o=orders.find_one({"_id":oid,"status":"pending_admin"})
+        if not o: bot.send_message(chat,"Buyurtma allaqachon ko‘rib chiqilgan."); return
+        if action=="approve":
+            orders.update_one({"_id":oid,"status":"pending_admin"},{"$set":{"status":"paid","approved_by":uid,"approved_at":now()}}); deliver(oid,o["user_id"])
+        else: orders.update_one({"_id":oid,"status":"pending_admin"},{"$set":{"status":"rejected","approved_by":uid}}); bot.send_message(o["user_id"],"To‘lov so‘rovi admin tomonidan rad etildi.")
+        bot.send_message(chat,"Bajarildi."); return
+    if data.startswith("adm:"):
+        if not admin(uid):return
+        _,action,*args=data.split(":")
+        if action=="pending":
+            rows=list(orders.find({"status":"pending_admin"}).sort("created_at",1).limit(20))
+            if not rows: bot.send_message(chat,"Kutayotgan to‘lov so‘rovlari yo‘q."); return
+            for o in rows:
+                kb=types.InlineKeyboardMarkup(); kb.row(inline_btn("✅ HA — tasdiqlash",callback_data=f"approve:{o['_id']}"),inline_btn("❌ YO‘Q — rad etish",callback_data=f"reject:{o['_id']}"))
+                bot.send_message(chat,f"Buyurtma <code>{o['_id']}</code>\n{esc(o['product_id'])} × {o['quantity']}\nUser: <code>{o['user_id']}</code>\nSumma: {o.get('price',0)}⭐",reply_markup=kb)
+            return
+        if action=="stats":
+            parts=["<b>📊 Bot statistikasi</b>",f"Foydalanuvchilar: {users.count_documents({})}",f"Sotuvdagi akkauntlar: {stock.count_documents({'status':'available'})}",f"Yakunlangan buyurtmalar: {orders.count_documents({'status':'delivered'})}",f"Admin tasdig‘ini kutmoqda: {orders.count_documents({'status':'pending_admin'})}",f"To‘lovni kutmoqda: {orders.count_documents({'status':'pending_payment'})}"]
+            bot.send_message(chat,"\n".join(parts)); return
+        if action=="product":
+            pid=":".join(args); p=products.find_one({"_id":pid}) or {"price":0}
+            kb=types.InlineKeyboardMarkup(); kb.row(inline_btn("💰 Narx",callback_data=f"adm:price:{pid}"),inline_btn("🎬 Video обзор",callback_data=f"adm:video:{pid}")); kb.row(inline_btn("📝 Tavsif",callback_data=f"adm:desc:{pid}"),inline_btn("📥 Akkaunt qo‘shish",callback_data=f"adm:stock:{pid}",style="success")); kb.add(inline_btn("🎁 Bepul huquq berish",callback_data=f"adm:free:{pid}",style="success"),inline_btn("➖ Huquqni o‘chirish",callback_data=f"adm:unfree:{pid}"))
+            bot.send_message(chat,f"{esc(pid)}\nNarx: {int(p.get('price',0))}⭐\nZaxira: {stock.count_documents({'product_id':pid,'status':'available'})}",reply_markup=kb); return
+        if action in ("price","video","desc","stock","free","unfree"):
+            pid=":".join(args); step={"price":"price","video":"video","desc":"description","stock":"add_stock","free":"free","unfree":"unfree"}[action]; sessions[uid]={"step":step,"product":pid}
+            prompts={"price":"Yangi Stars narxini yuboring:","video":"Akkaunt обзор videosini yuboring (yoki /skip):","desc":"Yangi tavsifni yuboring:","add_stock":"Gmail va parolni alohida qatorda yuboring:\nemail@gmail.com\nparol","free":"Bir martalik bepul akkaunt oladigan foydalanuvchining Telegram ID sini yuboring:","unfree":"Bepul huquqi o‘chiriladigan foydalanuvchining Telegram ID sini yuboring:"}
+            if step=="add_stock": prompts[step]="Har bir akkauntni bitta qatorda kiriting:\n02 | email@gmail.com | parol | OK\nTartib: kod | Gmail | parol | holati/izoh. Bir xabarda bir nechta akkaunt qo‘shish mumkin."
+            bot.send_message(chat,prompts[step]); return
+        if action=="sub": sessions[uid]={"step":"sub"}; bot.send_message(chat,"Kanal username yoki ID va ixtiyoriy havolani yuboring:\n@kanal https://t.me/kanal\nO‘chirish uchun off"); return
+        if action in ("free","unfree"):return
+def deliver(oid,chat_id):
+    o=orders.find_one_and_update({"_id":oid,"status":{"$in":["paid","delivered"]},"delivery_started":{"$ne":True}},
+        {"$set":{"delivery_started":True,"delivery_started_at":now()}},return_document=ReturnDocument.AFTER)
+    if not o:return
+    accounts=[]
+    for _ in range(o["quantity"]):
+        acc=stock.find_one_and_update({"product_id":o["product_id"],"status":"available"},{"$set":{"status":"sold","order_id":oid,"sold_at":now()}},return_document=ReturnDocument.AFTER)
+        if not acc: break
+        accounts.append(acc)
+    if len(accounts)<o["quantity"]:
+        for a in accounts: stock.update_one({"_id":a["_id"]},{"$set":{"status":"available"},"$unset":{"order_id":""}})
+        orders.update_one({"_id":oid},{"$set":{"status":"stock_error"},"$unset":{"delivery_started":""}})
+        for aid in ADMIN_IDS:
+            try: bot.send_message(aid,f"⚠️ Zaxira yetarli emas: {esc(o['product_id'])}, kerak {o['quantity']}. Akkaunt ma’lumotlarini qo‘shing.")
+            except Exception: pass
+        return
+    orders.update_one({"_id":oid},{"$set":{"delivered":True,"status":"delivered","accounts":[f"Kod: {a.get('account_code','')}\nGmail: {a['email']}\nParol: {a['password']}"+("\nHolati: "+a['extra'] if a.get('extra') else "") for a in accounts],"delivered_at":now()}})
+    lines=[f"<b>{esc(o['product_id'])}</b> — akkaunt {i+1}/{len(accounts)}\nKod: <code>{esc(a.get('account_code','—'))}</code>\nGmail: <code>{esc(a['email'])}</code>\nParol: <code>{esc(a['password'])}</code>"+(f"\nHolati: {esc(a['extra'])}" if a.get("extra") else "") for i,a in enumerate(accounts)]
+    bot.send_message(chat_id,"✅ <b>Akkauntlaringiz:</b>\n\n"+"\n\n".join(lines))
+    if stock.count_documents({"product_id":o["product_id"],"status":"available"})==0:
+        for aid in ADMIN_IDS:
+            try: bot.send_message(aid,f"⚠️ <b>{esc(o['product_id'])} tugadi.</b> Yangi akkaunt Gmail va parollarini matn ko‘rinishida yuboring.")
+            except Exception: pass
+@bot.message_handler(content_types=["successful_payment"])
+def payment(m):
+    p=m.successful_payment; o=orders.find_one({"payload":p.invoice_payload,"user_id":m.from_user.id,"status":"pending_payment"})
+    if not o or p.currency!="XTR" or p.total_amount!=o["price"]: bot.send_message(m.chat.id,"To‘lov qayd qilindi, lekin buyurtmani tekshirish uchun adminga yozing."); return
+    res=orders.update_one({"_id":o["_id"],"status":"pending_payment"},{"$set":{"status":"paid","charge_id":p.telegram_payment_charge_id,"paid_at":now()}})
+    if res.modified_count: deliver(o["_id"],m.chat.id)
+@bot.pre_checkout_query_handler(func=lambda q:True)
+def pre_checkout(q):
+    o=orders.find_one({"payload":q.invoice_payload,"user_id":q.from_user.id,"status":"pending_payment"}); ok=bool(o and q.currency=="XTR" and q.total_amount==o["price"] and stock.count_documents({"product_id":o["product_id"],"status":"available"})>=o["quantity"])
+    bot.answer_pre_checkout_query(q.id,ok=ok,error_message=None if ok else "Buyurtma eskirgan yoki zaxira yetarli emas.")
+@app.get("/health")
+def health():
+    try: DB.command("ping"); return jsonify(status="ok",database="connected")
+    except Exception:return jsonify(status="degraded",database="disconnected"),503
+@app.post("/telegram/webhook")
+def webhook():
+    secret=os.getenv("WEBHOOK_SECRET","")
+    if secret and request.headers.get("X-Telegram-Bot-Api-Secret-Token")!=secret:abort(403)
+    try: bot.process_new_updates([types.Update.de_json(request.get_data(as_text=True))]); return "ok"
+    except Exception: app.logger.exception("Telegram update failed"); return "error",500
+@app.cli.command("set-webhook")
+def set_webhook():
+    base=os.getenv("PUBLIC_BASE_URL","").rstrip("/")
+    if not base:raise RuntimeError("PUBLIC_BASE_URL sozlang")
+    bot.set_webhook(url=base+"/telegram/webhook",secret_token=os.getenv("WEBHOOK_SECRET") or None,allowed_updates=["message","callback_query","pre_checkout_query"]); print("Webhook o‘rnatildi")
+if __name__ == "__main__":
+    mode=os.getenv("BOT_MODE", "polling").strip().lower()
+    if mode == "polling":
+        # Local development: direct Telegram polling doesn't require a public HTTPS endpoint.
+        bot.remove_webhook()
+        bot.infinity_polling(timeout=60, long_polling_timeout=60, skip_pending=True)
+    else:
+        # Production webhook: configure using `flask --app cpm_store_bot set-webhook`.
+        app.run(host="0.0.0.0",port=int(os.getenv("PORT","5000")),debug=False)

@@ -537,8 +537,10 @@ def webhook():
     except Exception: app.logger.exception("Telegram update failed"); return "error",500
 @app.cli.command("set-webhook")
 def set_webhook():
-    base=os.getenv("PUBLIC_BASE_URL","").rstrip("/")
-    if not base:raise RuntimeError("PUBLIC_BASE_URL sozlang")
+    # PUBLIC_BASE_URL can override a custom domain; Render supplies
+    # RENDER_EXTERNAL_URL automatically for Web Services.
+    base=(os.getenv("PUBLIC_BASE_URL","").strip() or os.getenv("RENDER_EXTERNAL_URL","").strip()).rstrip("/")
+    if not base:raise RuntimeError("PUBLIC_BASE_URL yoki Render RENDER_EXTERNAL_URL mavjud emas")
     bot.set_webhook(url=base+"/telegram/webhook",secret_token=os.getenv("WEBHOOK_SECRET") or None,allowed_updates=["message","callback_query","pre_checkout_query"]); print("Webhook o‘rnatildi")
 if __name__ == "__main__":
     mode=os.getenv("BOT_MODE", "polling").strip().lower()

@@ -1,7 +1,7 @@
 """CPM account store: Telegram webhook + Flask + MongoDB + Stars."""
 from __future__ import annotations
 
-import os, re, secrets, time, threading, json
+import os, re, secrets, time, threading, json, logging
 from datetime import datetime, timezone, timedelta
 from html import escape
 from urllib.parse import urlparse
@@ -34,8 +34,15 @@ orders.create_index([("user_id", 1), ("created_at", -1)])
 stock.create_index([("product_id", 1), ("status", 1)])
 free_grants.create_index([("user_id", 1), ("product_id", 1)], unique=True)
 bot_sessions.create_index("expires_at", expireAfterSeconds=0)
-bot = telebot.TeleBot(BOT_TOKEN, parse_mode="HTML", threaded=True)
+class BotExceptionLogger(telebot.ExceptionHandler):
+    """Log exceptions raised inside threaded Telegram handlers."""
+    def handle(self, exception):
+        logging.getLogger("CPMStoreBot").error("Telegram handler crashed",exc_info=exception)
+        return True
+
+bot = telebot.TeleBot(BOT_TOKEN, parse_mode="HTML", threaded=True, exception_handler=BotExceptionLogger())
 app = Flask(__name__)
+app.logger.setLevel(logging.INFO)
 class MongoSessionStore:
     """Small dict-like session store shared safely by polling/web workers."""
     def get(self, user_id, default=None):

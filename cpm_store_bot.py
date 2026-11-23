@@ -1,7 +1,7 @@
 """CPM account store: Telegram webhook + Flask + MongoDB + Stars."""
 from __future__ import annotations
 
-import os, re, secrets, time, threading
+import os, re, secrets, time, threading, json
 from datetime import datetime, timezone, timedelta
 from html import escape
 from urllib.parse import urlparse
@@ -532,8 +532,16 @@ def health():
 @app.post("/telegram/webhook")
 def webhook():
     secret=os.getenv("WEBHOOK_SECRET","")
-    if secret and request.headers.get("X-Telegram-Bot-Api-Secret-Token")!=secret:abort(403)
-    try: bot.process_new_updates([types.Update.de_json(request.get_data(as_text=True))]); return "ok"
+    if secret and request.headers.get("X-Telegram-Bot-Api-Secret-Token")!=secret:
+        app.logger.warning("Rejected Telegram webhook request: secret header did not match")
+        abort(403)
+    try:
+        body=request.get_data(as_text=True)
+        data=json.loads(body)
+        kinds=[key for key in ("message","callback_query","pre_checkout_query") if key in data]
+        app.logger.info("Telegram webhook update received: id=%s type=%s",data.get("update_id"),",".join(kinds) or "other")
+        bot.process_new_updates([types.Update.de_json(body)])
+        return "ok"
     except Exception: app.logger.exception("Telegram update failed"); return "error",500
 @app.cli.command("set-webhook")
 def set_webhook():
@@ -541,7 +549,10 @@ def set_webhook():
     # RENDER_EXTERNAL_URL automatically for Web Services.
     base=(os.getenv("PUBLIC_BASE_URL","").strip() or os.getenv("RENDER_EXTERNAL_URL","").strip()).rstrip("/")
     if not base:raise RuntimeError("PUBLIC_BASE_URL yoki Render RENDER_EXTERNAL_URL mavjud emas")
-    bot.set_webhook(url=base+"/telegram/webhook",secret_token=os.getenv("WEBHOOK_SECRET") or None,allowed_updates=["message","callback_query","pre_checkout_query"]); print("Webhook o‘rnatildi")
+    webhook_url=base+"/telegram/webhook"
+    bot.set_webhook(url=webhook_url,secret_token=os.getenv("WEBHOOK_SECRET") or None,allowed_updates=["message","callback_query","pre_checkout_query"])
+    info=bot.get_webhook_info()
+    print(f"Webhook o‘rnatildi: {info.url}; navbatda={info.pending_update_count}; oxirgi xato={info.last_error_message or 'yo‘q'}",flush=True)
 if __name__ == "__main__":
     mode=os.getenv("BOT_MODE", "polling").strip().lower()
     if mode == "polling":

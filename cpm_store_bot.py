@@ -38,9 +38,12 @@ class BotExceptionLogger(telebot.ExceptionHandler):
     """Log exceptions raised inside threaded Telegram handlers."""
     def handle(self, exception):
         logging.getLogger("CPMStoreBot").error("Telegram handler crashed",exc_info=exception)
-        return True
+        return False
 
-bot = telebot.TeleBot(BOT_TOKEN, parse_mode="HTML", threaded=True, exception_handler=BotExceptionLogger())
+# Webhook updates are handled before returning HTTP 200. This keeps failures
+# visible to Flask/Render and prevents a successful webhook ACK while the
+# Telegram handler is still queued in an idle worker thread.
+bot = telebot.TeleBot(BOT_TOKEN, parse_mode="HTML", threaded=False, exception_handler=BotExceptionLogger())
 app = Flask(__name__)
 app.logger.setLevel(logging.INFO)
 class MongoSessionStore:
@@ -557,7 +560,7 @@ def set_webhook():
     base=(os.getenv("PUBLIC_BASE_URL","").strip() or os.getenv("RENDER_EXTERNAL_URL","").strip()).rstrip("/")
     if not base:raise RuntimeError("PUBLIC_BASE_URL yoki Render RENDER_EXTERNAL_URL mavjud emas")
     webhook_url=base+"/telegram/webhook"
-    bot.set_webhook(url=webhook_url,secret_token=os.getenv("WEBHOOK_SECRET") or None,allowed_updates=["message","callback_query","pre_checkout_query"])
+    bot.set_webhook(url=webhook_url,max_connections=1,secret_token=os.getenv("WEBHOOK_SECRET") or None,allowed_updates=["message","callback_query","pre_checkout_query"])
     info=bot.get_webhook_info()
     print(f"Webhook o‘rnatildi: {info.url}; navbatda={info.pending_update_count}; oxirgi xato={info.last_error_message or 'yo‘q'}",flush=True)
 if __name__ == "__main__":

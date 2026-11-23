@@ -104,11 +104,28 @@ def keep_polling_lock(owner, stop_event):
 PRODUCTS = ["CPM1 VINIL AKK", "CPM1 FULL AKK", "CPM1 ANIME AKK", "CPM1 HD LOGO AKK"]
 LANGS = {"uz": "🇺🇿 O‘zbekcha", "ru": "🇷🇺 Русский", "en": "🇬🇧 English"}
 T = {
-"uz": {"choose": "Tilni tanlang:", "menu": "Asosiy menyu", "buy": "🛍 Mahsulotlar", "orders": "📦 Buyurtmalarim", "admin": "⚙️ Admin panel", "sub": "Davom etish uchun kanalga obuna bo‘ling, keyin Tekshirish tugmasini bosing.", "check": "✅ Tekshirish", "not_sub": "Kanalga obuna topilmadi. Obuna bo‘lib qayta tekshiring.", "quantity": "Nechta akkaunt kerak? Miqdorni son bilan yuboring:", "purchase": "Sotib olasizmi?", "yes": "✅ HA", "no": "❌ YO‘Q", "pay": "TO‘LOV TURINI TANLANG", "adminpay": "👤 ADMIN ORQALI", "stars": "⭐ STARS ORQALI", "empty": "Hozircha mahsulot yo‘q.", "orders_empty": "Buyurtmalaringiz yo‘q."},
-"ru": {"choose": "Выберите язык:", "menu": "Главное меню", "buy": "🛍 Товары", "orders": "📦 Мои заказы", "admin": "⚙️ Панель администратора", "sub": "Подпишитесь на канал и нажмите Проверить.", "check": "✅ Проверить", "not_sub": "Подписка не найдена.", "quantity": "Сколько аккаунтов нужно? Отправьте число:", "purchase": "Покупаете?", "yes": "✅ ДА", "no": "❌ НЕТ", "pay": "ВЫБЕРИТЕ СПОСОБ ОПЛАТЫ", "adminpay": "👤 ЧЕРЕЗ АДМИНА", "stars": "⭐ ЧЕРЕЗ STARS", "empty": "Товаров пока нет.", "orders_empty": "Заказов нет."},
-"en": {"choose": "Choose a language:", "menu": "Main menu", "buy": "🛍 Products", "orders": "📦 My orders", "admin": "⚙️ Admin panel", "sub": "Subscribe to the channel, then tap Check.", "check": "✅ Check", "not_sub": "Channel subscription not found.", "quantity": "How many accounts do you need? Send a number:", "purchase": "Would you like to buy?", "yes": "✅ YES", "no": "❌ NO", "pay": "CHOOSE PAYMENT METHOD", "adminpay": "👤 VIA ADMIN", "stars": "⭐ VIA STARS", "empty": "No products yet.", "orders_empty": "No orders yet."}}
+"uz": {"choose":"Tilni tanlang:","menu":"Asosiy menyu","buy":"🛍 Mahsulotlar","orders":"📦 Buyurtmalarim","support":"💬 Support","admin":"⚙️ Admin panel","sub":"Davom etish uchun kanalga obuna bo‘ling, keyin Tekshirish tugmasini bosing.","sub_all":"Quyidagi kanallarning barchasiga obuna bo‘ling:","subscribe":"📢 {name} kanaliga obuna bo‘lish","missing_link":"Kanal havolasi admin tomonidan sozlanmagan.","check":"✅ Tekshirish","not_sub":"Kanalga obuna topilmadi. Obuna bo‘lib qayta tekshiring.","quantity":"Nechta akkaunt kerak? Miqdorni son bilan yuboring:","quantity_invalid":"1 dan 50 gacha butun son yuboring.","purchase":"Sotib olasizmi?","yes":"✅ HA","no":"❌ YO‘Q","pay":"TO‘LOV TURINI TANLANG","adminpay":"👤 ADMIN ORQALI","stars":"⭐ STARS ORQALI","empty":"Hozircha mahsulot yo‘q.","orders_empty":"Buyurtmalaringiz yo‘q.","product_prompt":"Mahsulotni tanlang:","stock_count":"{count} ta","stock_empty":"❌ <b>{product}</b> hozircha qolmagan. Admin yangi akkaunt qo‘shgandan keyin qayta tanlang.","preview_default":"Akkaunt video abzori","price_unit":"Narxi: <b>{price} ⭐ / dona</b>","orders_title":"📦 Buyurtmalarim","order_product":"Mahsulot","order_quantity":"Miqdor","order_status":"Holat","order_date":"Sana","status_pending_admin":"Admin tasdig‘ini kutmoqda","status_pending_payment":"To‘lov kutilmoqda","status_delivered":"Yetkazildi","status_rejected":"Rad etildi","status_paid":"To‘landi","status_free":"Bepul","status_stock_error":"Zaxira xatosi","status_unknown":"Noma’lum","order_stale":"Buyurtma eskirgan. Qaytadan boshlang.","stock_short":"Zaxirada yetarli akkaunt yo‘q. Boshqa mahsulotni tanlang yoki keyinroq urinib ko‘ring.","manual_sent":"So‘rovingiz adminga yuborildi. Tasdiqlanishini kuting.","payment_help":"To‘lov qayd qilindi, ammo buyurtmani tekshirish uchun qo‘llab-quvvatlashga yozing.","support_text":"📩 Taklif yoki muammo bo‘lsa, <a href='https://t.me/cpm_java'>@cpm_java</a> ga yozing. Sizga yordam berishdan mamnunmiz."},
+"ru": {"choose":"Выберите язык:","menu":"Главное меню","buy":"🛍 Товары","orders":"📦 Мои заказы","support":"💬 Поддержка","admin":"⚙️ Панель администратора","sub":"Чтобы продолжить, подпишитесь на канал и нажмите «Проверить».","sub_all":"Подпишитесь на все каналы ниже:","subscribe":"📢 Подписаться на {name}","missing_link":"Ссылка канала не настроена администратором.","check":"✅ Проверить","not_sub":"Подписка не найдена. Подпишитесь и проверьте снова.","quantity":"Сколько аккаунтов нужно? Отправьте число:","quantity_invalid":"Введите целое число от 1 до 50.","purchase":"Покупаете?","yes":"✅ ДА","no":"❌ НЕТ","pay":"ВЫБЕРИТЕ СПОСОБ ОПЛАТЫ","adminpay":"👤 ЧЕРЕЗ АДМИНА","stars":"⭐ ЧЕРЕЗ STARS","empty":"Товаров пока нет.","orders_empty":"У вас пока нет заказов.","product_prompt":"Выберите товар:","stock_count":"{count} шт.","stock_empty":"❌ <b>{product}</b> временно закончился. Попробуйте позже.","preview_default":"Видеообзор аккаунта","price_unit":"Цена: <b>{price} ⭐ / шт.</b>","orders_title":"📦 Мои заказы","order_product":"Товар","order_quantity":"Количество","order_status":"Статус","order_date":"Дата","status_pending_admin":"Ожидает подтверждения администратора","status_pending_payment":"Ожидает оплату","status_delivered":"Доставлен","status_rejected":"Отклонён","status_paid":"Оплачен","status_free":"Бесплатно","status_stock_error":"Ошибка наличия","status_unknown":"Неизвестно","order_stale":"Заказ устарел. Начните заново.","stock_short":"Недостаточно аккаунтов. Выберите другой товар или попробуйте позже.","manual_sent":"Запрос отправлен администратору. Ожидайте подтверждения.","payment_help":"Платёж получен, но заказ не подтверждён. Напишите в поддержку.","support_text":"📩 Есть предложение или проблема? Напишите <a href='https://t.me/cpm_java'>@cpm_java</a>. Мы постараемся помочь."},
+"en": {"choose":"Choose your language:","menu":"Main menu","buy":"🛍 Products","orders":"📦 My orders","support":"💬 Support","admin":"⚙️ Admin panel","sub":"Subscribe to the channel to continue, then tap Check.","sub_all":"Please subscribe to all channels below:","subscribe":"📢 Join {name}","missing_link":"The channel link has not been configured by the admin.","check":"✅ Check","not_sub":"Subscription not found. Join the channel and check again.","quantity":"How many accounts do you need? Send a number:","quantity_invalid":"Send a whole number from 1 to 50.","purchase":"Would you like to buy?","yes":"✅ YES","no":"❌ NO","pay":"CHOOSE A PAYMENT METHOD","adminpay":"👤 VIA ADMIN","stars":"⭐ VIA STARS","empty":"No products are available yet.","orders_empty":"You have no orders yet.","product_prompt":"Choose a product:","stock_count":"{count} available","stock_empty":"❌ <b>{product}</b> is currently out of stock. Please try again later.","preview_default":"Account video preview","price_unit":"Price: <b>{price} ⭐ each</b>","orders_title":"📦 My orders","order_product":"Product","order_quantity":"Quantity","order_status":"Status","order_date":"Date","status_pending_admin":"Awaiting admin approval","status_pending_payment":"Awaiting payment","status_delivered":"Delivered","status_rejected":"Rejected","status_paid":"Paid","status_free":"Free","status_stock_error":"Stock error","status_unknown":"Unknown","order_stale":"This order expired. Please start again.","stock_short":"Not enough accounts in stock. Choose another product or try later.","manual_sent":"Your request was sent to the admin. Please wait for approval.","payment_help":"Payment was recorded, but the order needs review. Please contact support.","support_text":"📩 Have a suggestion or a problem? Contact <a href='https://t.me/cpm_java'>@cpm_java</a>. We’ll be glad to help."}}
+T["uz"].update({"preview_error":"Video obzor hozircha ochilmadi.","admin_profile":"👤 Admin profili","payment_failed":"To‘lov qayd qilindi, ammo buyurtma tekshiruvi uchun adminga yozing.","rejected":"To‘lov so‘rovi admin tomonidan rad etildi.","checkout_failed":"Buyurtma muddati o‘tgan yoki zaxira yetarli emas.","invoice_description":"{quantity} ta akkaunt","account_header":"✅ <b>Akkauntlaringiz:</b>","account_item":"akkaunt","account_code":"Kod","account_email":"Gmail","account_password":"Parol","account_note":"Holati"})
+T["ru"].update({"preview_error":"Видеообзор пока недоступен.","admin_profile":"👤 Профиль администратора","payment_failed":"Платёж записан, но для проверки заказа напишите администратору.","rejected":"Администратор отклонил запрос на оплату.","checkout_failed":"Срок заказа истёк или товара недостаточно.","invoice_description":"Аккаунтов: {quantity}","account_header":"✅ <b>Ваши аккаунты:</b>","account_item":"аккаунт","account_code":"Код","account_email":"Почта","account_password":"Пароль","account_note":"Статус"})
+T["en"].update({"preview_error":"The video preview is temporarily unavailable.","admin_profile":"👤 Admin profile","payment_failed":"Payment was recorded, but please contact the admin to review the order.","rejected":"The admin rejected the payment request.","checkout_failed":"The order expired or there is not enough stock.","invoice_description":"{quantity} account(s)","account_header":"✅ <b>Your accounts:</b>","account_item":"account","account_code":"Code","account_email":"Email","account_password":"Password","account_note":"Status"})
 def now(): return datetime.now(timezone.utc)
-def tr(uid, key): return T.get(users.find_one({"_id": uid}, {"lang": 1}).get("lang", "uz") if users.find_one({"_id": uid}) else "uz", T["uz"])[key]
+def lang_of(uid):
+    user=users.find_one({"_id":int(uid)},{"lang":1}) or {}
+    return user.get("lang") if user.get("lang") in T else "uz"
+def tr(uid,key,**values):
+    text=T.get(lang_of(uid),T["uz"]).get(key,T["uz"].get(key,key))
+    return text.format(**values) if values else text
+def order_status_text(uid,status):
+    return tr(uid,"status_"+str(status)) if "status_"+str(status) in T[lang_of(uid)] else tr(uid,"status_unknown")
+def account_text(uid,product_id,account,index,total):
+    note=account.get("extra") or ""
+    return (f"<b>{esc(product_id)}</b> — {tr(uid,'account_item')} {index}/{total}\n"
+            f"{tr(uid,'account_code')}: <code>{esc(account.get('account_code') or '—')}</code>\n"
+            f"{tr(uid,'account_email')}: <code>{esc(account.get('email'))}</code>\n"
+            f"{tr(uid,'account_password')}: <code>{esc(account.get('password'))}</code>"+
+            (f"\n{tr(uid,'account_note')}: {esc(note)}" if note else ""))
 def esc(v, n=1200): return escape(str(v or "")[:n])
 def admin(uid): return uid in ADMIN_IDS
 def button_url(value):
@@ -149,6 +166,7 @@ def reply_btn(text, style="primary"):
 def main_kb(uid):
     kb=types.ReplyKeyboardMarkup(resize_keyboard=True)
     kb.row(reply_btn(tr(uid,"buy"),"success"),reply_btn(tr(uid,"orders"),"primary"))
+    kb.row(reply_btn(tr(uid,"support"),"primary"))
     if admin(uid): kb.add(reply_btn(tr(uid,"admin"),"primary"))
     return kb
 def language_prompt(chat):
@@ -220,18 +238,18 @@ def subscription_prompt(chat,uid):
     kb=types.InlineKeyboardMarkup(row_width=1)
     for channel in channels:
         label=channel["title"]
-        kb.add(inline_btn(f"📢 {label} ga obuna bo‘lish",url=channel["url"]) if channel["url"] else inline_btn(f"📢 {label} (havola admin tomonidan kiritilmagan)",callback_data="sub:link_missing"))
+        kb.add(inline_btn(tr(uid,"subscribe",name=label),url=channel["url"]) if channel["url"] else inline_btn(f"📢 {label}",callback_data="sub:link_missing"))
     kb.add(inline_btn(tr(uid,"check"),callback_data="sub:check"))
-    bot.send_message(chat,tr(uid,"sub")+"\n\nQuyidagi kanallarning barchasiga obuna bo‘ling:",reply_markup=kb)
+    bot.send_message(chat,tr(uid,"sub")+"\n\n"+tr(uid,"sub_all"),reply_markup=kb)
 def list_products(chat,uid):
     kb=types.InlineKeyboardMarkup(row_width=1)
     for name in PRODUCTS:
         p=products.find_one({"_id":name}) or {"price":0,"video_file_id":None}
         amount=stock.count_documents({"product_id":name,"status":"available"})
-        kb.add(inline_btn(f"{name} · {int(p.get('price',0))}⭐ · {amount} ta",callback_data=f"item:{name}"))
-    bot.send_message(chat,"Mahsulotni tanlang:",reply_markup=kb)
-def send_item(chat,p):
-    caption=f"<b>{esc(p['_id'])}</b>\n\n{esc(p.get('description') or 'Akkaunt video abzori') }\n\nNarxi: <b>{int(p.get('price',0))} ⭐ / dona</b>"
+        kb.add(inline_btn(f"{name} · {int(p.get('price',0))}⭐ · {tr(uid,'stock_count',count=amount)}",callback_data=f"item:{name}"))
+    bot.send_message(chat,tr(uid,"product_prompt"),reply_markup=kb)
+def send_item(chat,p,uid):
+    caption=f"<b>{esc(p['_id'])}</b>\n\n{esc(p.get('description') or tr(uid,'preview_default'))}\n\n{tr(uid,'price_unit',price=int(p.get('price',0)))}"
     if p.get("video_file_id"): bot.send_video(chat,p["video_file_id"],caption=caption)
     else: bot.send_message(chat,caption)
 @bot.message_handler(commands=["start","help"])
@@ -261,6 +279,8 @@ def text_handler(m):
     if not (users.find_one({"_id":uid},{"lang":1}) or {}).get("lang"): language_prompt(m.chat.id); return
     if not has_subscription(uid): subscription_prompt(m.chat.id,uid); return
     if val in (tr(uid,"buy"),"🛍 Mahsulotlar"): list_products(m.chat.id,uid)
+    elif val in (tr(uid,"support"),"💬 Support","💬 Поддержка"):
+        bot.send_message(m.chat.id,tr(uid,"support_text"),disable_web_page_preview=True)
     elif val in (tr(uid,"orders"),"📦 Buyurtmalarim"):
         rows=list(orders.find({"user_id":uid}).sort("created_at",-1).limit(20))
         if not rows: bot.send_message(m.chat.id,tr(uid,"orders_empty"))
@@ -268,11 +288,13 @@ def text_handler(m):
             out=[]
             for o in rows:
                 created=o.get("created_at"); stamp=created.strftime("%d.%m.%Y %H:%M") if created else ""
-                out.append(f"• {esc(o['product_id'])} × {o['quantity']} — <b>{esc(o['status'])}</b> · {stamp}"+("\n"+"\n".join(f"<code>{esc(a,400)}</code>" for a in o.get("accounts",[])) if o.get("accounts") else ""))
-            bot.send_message(m.chat.id,"<b>📦 Buyurtmalarim</b>\n"+"\n\n".join(out))
+                account_details=o.get("account_details") or []
+                account_output=("\n\n"+"\n\n".join(account_text(uid,o["product_id"],a,i+1,len(account_details)) for i,a in enumerate(account_details))) if account_details else ("\n"+"\n".join(f"<code>{esc(a,400)}</code>" for a in o.get("accounts",[])) if o.get("accounts") else "")
+                out.append(f"• {tr(uid,'order_product')}: <b>{esc(o['product_id'])}</b>\n{tr(uid,'order_quantity')}: {o['quantity']}\n{tr(uid,'order_status')}: <b>{esc(order_status_text(uid,o.get('status')))}</b> · {stamp}"+account_output)
+            bot.send_message(m.chat.id,"<b>"+tr(uid,"orders_title")+"</b>\n\n"+"\n\n".join(out))
     elif val in (tr(uid,"admin"),"⚙️ Admin panel") and admin(uid): admin_panel(m.chat.id)
     elif state and state.get("step")=="quantity":
-        if not val.isdigit() or not 1<=int(val)<=50: bot.send_message(m.chat.id,"1 dan 50 gacha butun son yuboring."); return
+        if not val.isdigit() or not 1<=int(val)<=50: bot.send_message(m.chat.id,tr(uid,"quantity_invalid")); return
         state["quantity"]=int(val); sessions.update(uid,{"quantity":int(val)}); kb=types.InlineKeyboardMarkup(); kb.row(inline_btn(tr(uid,"yes"),callback_data="confirm:yes"),inline_btn(tr(uid,"no"),callback_data="confirm:no"))
         p=products.find_one({"_id":state["product_id"]}) or {"price":0}
         bot.send_message(m.chat.id,f"{tr(uid,'purchase')}\n{esc(state['product_id'])} × {state['quantity']} — {int(p.get('price',0))*state['quantity']} ⭐",reply_markup=kb)
@@ -283,6 +305,7 @@ def admin_panel(chat):
     kb.row(inline_btn("🧾 Kutayotgan buyurtmalar",callback_data="adm:pending"),inline_btn("📊 Statistika",callback_data="adm:stats"))
     kb.add(inline_btn("📢 Majburiy obuna",callback_data="adm:sub"))
     kb.add(inline_btn("🔎 Obunani tekshirish",callback_data="adm:testsub"))
+    kb.add(inline_btn("📣 Sotuvlar kanali",callback_data="adm:saleschannel"))
     kb.add(inline_btn("📣 Foydalanuvchilarga xabar",callback_data="adm:broadcast"))
     bot.send_message(chat,"<b>⚙️ Admin panel</b>\nMahsulot kartasi, narx, обзор видео, захира ва махсус функцияларни бошқаринг.",reply_markup=kb)
 
@@ -344,6 +367,17 @@ def admin_text(m,s):
             return
         DB.settings.update_one({"_id":"main"},{"$set":{"channels":channels,"channel":channels[0]["chat_id"],"url":channels[0]["url"],"enabled":True}},upsert=True)
         sessions.pop(uid,None); bot.send_message(m.chat.id,f"Majburiy obuna saqlandi: {len(channels)} ta kanal. Botni har bir kanalga administrator qilib qo‘ying."); return
+    if step=="sales_channel":
+        if val.lower() in ("off","o‘chirish","ochirish"):
+            DB.settings.update_one({"_id":"main"},{"$set":{"sales_channel":""}},upsert=True)
+            sessions.pop(uid,None); bot.send_message(m.chat.id,"Sotuvlar kanaliga xabar yuborish o‘chirildi."); return
+        target=val
+        if target.startswith(("https://","http://","t.me/")):
+            target=channel_username_from_url(target)
+        if not (target.startswith("@") or re.fullmatch(r"-?\d{5,20}",target)):
+            bot.send_message(m.chat.id,"Kanal @username yoki -100... ko‘rinishidagi ID bo‘lishi kerak. O‘chirish: off"); return
+        DB.settings.update_one({"_id":"main"},{"$set":{"sales_channel":target}},upsert=True)
+        sessions.pop(uid,None); bot.send_message(m.chat.id,f"Sotuvlar kanali saqlandi: {esc(target)}. Botni kanalga administrator qilib qo‘ying."); return
     if step=="add_stock":
         added=0; invalid=[]
         for line_no,line in enumerate(val.splitlines(),1):
@@ -393,7 +427,7 @@ def callbacks(c):
             subscription_prompt(chat,uid)
         return
     if data=="sub:link_missing":
-        bot.answer_callback_query(c.id,"Kanal havolasi admin tomonidan sozlanmagan.",show_alert=True); return
+        bot.answer_callback_query(c.id,tr(uid,"missing_link"),show_alert=True); return
     if not admin(uid) and (not users.find_one({"_id":uid}) or not users.find_one({"_id":uid}).get("lang")):
         language_prompt(chat); return
     if not admin(uid) and not has_subscription(uid):
@@ -404,7 +438,7 @@ def callbacks(c):
         p=products.find_one({"_id":pid}) or {"_id":pid,"price":0}
         available=stock.count_documents({"product_id":pid,"status":"available"})
         if available==0:
-            bot.send_message(chat,f"❌ <b>{esc(pid)}</b> hozircha qolmagan. Admin yangi akkaunt qo‘shgandan keyin qayta tanlang.")
+            bot.send_message(chat,tr(uid,"stock_empty",product=esc(pid)))
             for aid in ADMIN_IDS:
                 try: bot.send_message(aid,f"⚠️ Zaxira bo‘sh: {esc(pid)}. Yangi akkauntlar qo‘shing.")
                 except Exception: app.logger.exception("Could not notify admin about empty stock")
@@ -413,26 +447,26 @@ def callbacks(c):
         # file_id must not leave the user with a dead product button.
         sessions[uid]={"step":"quantity","product_id":pid}
         try:
-            send_item(chat,p)
+            send_item(chat,p,uid)
         except Exception:
             app.logger.exception("Product preview failed for %s",pid)
-            bot.send_message(chat,f"<b>{esc(pid)}</b>\nNarxi: {int(p.get('price',0))} ⭐ / dona\n\nVideo обзор hozircha ochilmadi.")
+            bot.send_message(chat,f"<b>{esc(pid)}</b>\n{tr(uid,'price_unit',price=int(p.get('price',0)))}\n\n{tr(uid,'preview_error')}")
         bot.send_message(chat,tr(uid,"quantity")); return
     if data=="confirm:no": sessions.pop(uid,None); bot.send_message(chat,tr(uid,"menu"),reply_markup=main_kb(uid)); return
     if data=="confirm:yes":
         s=sessions.get(uid)
-        if not s or s.get("step")!="quantity": bot.send_message(chat,"Buyurtma eskirgan. Qaytadan boshlang."); return
+        if not s or s.get("step")!="quantity": bot.send_message(chat,tr(uid,"order_stale")); return
         kb=types.InlineKeyboardMarkup(); kb.row(inline_btn(tr(uid,"adminpay"),callback_data="pay:admin"),inline_btn(tr(uid,"stars"),callback_data="pay:stars",style="success"))
         admin_profile=button_url(os.getenv("ADMIN_PROFILE_URL", "") or os.getenv("ADMIN_USERNAME", ""))
-        if admin_profile: kb.add(inline_btn("👤 Admin profili",url=admin_profile))
+        if admin_profile: kb.add(inline_btn(tr(uid,"admin_profile"),url=admin_profile))
         bot.send_message(chat,tr(uid,"pay"),reply_markup=kb); return
     if data.startswith("pay:"):
         if data not in ("pay:admin","pay:stars"): return
         s=sessions.get(uid)
-        if not s or s.get("step")!="quantity": bot.send_message(chat,"Buyurtma eskirgan."); return
+        if not s or s.get("step")!="quantity": bot.send_message(chat,tr(uid,"order_stale")); return
         qty=s["quantity"]; pid=s["product_id"]; p=products.find_one({"_id":pid}) or {"price":0}
         if stock.count_documents({"product_id":pid,"status":"available"})<qty:
-            bot.send_message(chat,"Zaxirada yetarli akkaunt yo‘q. Boshqa mahsulot tanlang yoki keyinroq urinib ko‘ring.")
+            bot.send_message(chat,tr(uid,"stock_short"))
             for aid in ADMIN_IDS:
                 try: bot.send_message(aid,f"⚠️ Zaxira yetarli emas: {esc(pid)}; talab {qty} dona, mavjud {stock.count_documents({'product_id':pid,'status':'available'})} dona.")
                 except Exception: pass
@@ -442,26 +476,26 @@ def callbacks(c):
             order_id=secrets.token_hex(12); orders.insert_one({"_id":order_id,"user_id":uid,"product_id":pid,"quantity":1,"method":"free","status":"paid","created_at":now()})
             deliver(order_id,chat); sessions.pop(uid,None); return
         oid=secrets.token_hex(12); qty_available=stock.count_documents({"product_id":pid,"status":"available"})
-        if qty_available<qty: bot.send_message(chat,"Zaxirada yetarli akkaunt yo‘q."); return
+        if qty_available<qty: bot.send_message(chat,tr(uid,"stock_short")); return
         order={"_id":oid,"user_id":uid,"product_id":pid,"quantity":qty,"method":data[4:],"price":int(p.get("price",0))*qty,"status":"pending_admin" if data=="pay:admin" else "pending_payment","created_at":now()}
         if data=="pay:stars":
             payload=f"cpm:{oid}:{secrets.token_urlsafe(8)}"; order["payload"]=payload; orders.insert_one(order)
-            bot.send_invoice(chat,title=pid[:32],description=f"{qty} akkaunt"[:255],invoice_payload=payload,provider_token="",currency="XTR",prices=[types.LabeledPrice(label=f"{pid} × {qty}"[:32],amount=order["price"])],start_parameter=f"cpm{oid}")
+            bot.send_invoice(chat,title=pid[:32],description=tr(uid,"invoice_description",quantity=qty)[:255],invoice_payload=payload,provider_token="",currency="XTR",prices=[types.LabeledPrice(label=f"{pid} × {qty}"[:32],amount=order["price"])],start_parameter=f"cpm{oid}")
         else:
             orders.insert_one(order); kb=types.InlineKeyboardMarkup(); kb.row(inline_btn("✅ HA — tasdiqlash",callback_data=f"approve:{oid}"),inline_btn("❌ YO‘Q — rad etish",callback_data=f"reject:{oid}"))
             name=users.find_one({"_id":uid}) or {}
             for aid in ADMIN_IDS:
                 try: bot.send_message(aid,f"<b>To‘lov tasdiqlansinmi?</b>\n{esc(pid)} × {qty}\nFoydalanuvchi: {uid} @{esc(name.get('username',''))}\nNarx: {order['price']} ⭐",reply_markup=kb)
                 except Exception: pass
-            bot.send_message(chat,"So‘rovingiz adminga yuborildi. Tasdiqlanishini kuting.")
+            bot.send_message(chat,tr(uid,"manual_sent"))
         sessions.pop(uid,None); return
     if data.startswith("approve:") or data.startswith("reject:"):
         if not admin(uid):return
         action,oid=data.split(":",1); o=orders.find_one({"_id":oid,"status":"pending_admin"})
-        if not o: bot.send_message(chat,"Buyurtma allaqachon ko‘rib chiqilgan."); return
+        if not o: bot.send_message(chat,tr(uid,"order_stale")); return
         if action=="approve":
             orders.update_one({"_id":oid,"status":"pending_admin"},{"$set":{"status":"paid","approved_by":uid,"approved_at":now()}}); deliver(oid,o["user_id"])
-        else: orders.update_one({"_id":oid,"status":"pending_admin"},{"$set":{"status":"rejected","approved_by":uid}}); bot.send_message(o["user_id"],"To‘lov so‘rovi admin tomonidan rad etildi.")
+        else: orders.update_one({"_id":oid,"status":"pending_admin"},{"$set":{"status":"rejected","approved_by":uid}}); bot.send_message(o["user_id"],tr(o["user_id"],"rejected"))
         bot.send_message(chat,"Bajarildi."); return
     if data.startswith("adm:"):
         if not admin(uid):return
@@ -473,6 +507,11 @@ def callbacks(c):
                 execute_broadcast(chat,uid); return
             sessions[uid]={"step":"broadcast_input"}
             bot.send_message(chat,"Foydalanuvchilarga yuboriladigan xabarni jo‘nating. Matn, rasm, video, fayl, audio va boshqa Telegram xabar turlari mumkin. Bekor qilish: /cancel")
+            return
+        if action=="saleschannel":
+            current=(DB.settings.find_one({"_id":"main"}) or {}).get("sales_channel") or "sozlanmagan"
+            sessions[uid]={"step":"sales_channel"}
+            bot.send_message(chat,f"Sotuvlar kanali hozir: <code>{esc(current)}</code>\nKanal @username yoki -100... ko‘rinishidagi ID sini yuboring. Public t.me havolasi ham mumkin. O‘chirish: off")
             return
         if action=="testsub":
             channels=configured_subscriptions()
@@ -518,9 +557,30 @@ def deliver(oid,chat_id):
             try: bot.send_message(aid,f"⚠️ Zaxira yetarli emas: {esc(o['product_id'])}, kerak {o['quantity']}. Akkaunt ma’lumotlarini qo‘shing.")
             except Exception: pass
         return
-    orders.update_one({"_id":oid},{"$set":{"delivered":True,"status":"delivered","accounts":[f"Kod: {a.get('account_code','')}\nGmail: {a['email']}\nParol: {a['password']}"+("\nHolati: "+a['extra'] if a.get('extra') else "") for a in accounts],"delivered_at":now()}})
-    lines=[f"<b>{esc(o['product_id'])}</b> — akkaunt {i+1}/{len(accounts)}\nKod: <code>{esc(a.get('account_code','—'))}</code>\nGmail: <code>{esc(a['email'])}</code>\nParol: <code>{esc(a['password'])}</code>"+(f"\nHolati: {esc(a['extra'])}" if a.get("extra") else "") for i,a in enumerate(accounts)]
-    bot.send_message(chat_id,"✅ <b>Akkauntlaringiz:</b>\n\n"+"\n\n".join(lines))
+    orders.update_one({"_id":oid},{"$set":{"delivered":True,"status":"delivered","accounts":[f"Kod: {a.get('account_code','')}\nGmail: {a['email']}\nParol: {a['password']}"+("\nHolati: "+a['extra'] if a.get('extra') else "") for a in accounts],"account_details":[{"account_code":a.get("account_code",""),"email":a.get("email",""),"password":a.get("password",""),"extra":a.get("extra","")} for a in accounts],"delivered_at":now()}})
+    if o.get("method") in ("admin","stars"):
+        settings=DB.settings.find_one({"_id":"main"}) or {}
+        sales_channel=settings.get("sales_channel")
+        if sales_channel:
+            buyer=users.find_one({"_id":int(o["user_id"])}) or {}
+            username=(buyer.get("username") or "").strip().lstrip("@")
+            if username:
+                buyer_label=f"<a href='tg://user?id={int(o['user_id'])}'>@{esc(username,64)}</a>"
+            else:
+                buyer_label=f"<a href='tg://user?id={int(o['user_id'])}'>{esc(buyer.get('first_name') or 'Foydalanuvchi',100)}</a>"
+            quantity=int(o.get("quantity",1) or 1)
+            total=int(o.get("price",0) or 0)
+            unit=total//quantity if quantity else total
+            notice=("🛍 <b>YANGI XARID</b>\n\n"
+                    f"👤 <b>FOYDALANUVCHI:</b> {buyer_label}\n"
+                    f"🎮 <b>AKKAUNT TURI:</b> {esc(o.get('product_id',''),120)}\n"
+                    f"🔢 <b>SONI:</b> {quantity} ta\n"
+                    f"💳 <b>AKKAUNT NARXI:</b> {unit} ⭐\n"
+                    f"💰 <b>JAMI:</b> {total} ⭐")
+            try: bot.send_message(sales_channel,notice,disable_web_page_preview=True)
+            except Exception: app.logger.exception("Could not send sale notice to configured sales channel")
+    lines=[account_text(int(o["user_id"]),o["product_id"],a,i+1,len(accounts)) for i,a in enumerate(accounts)]
+    bot.send_message(chat_id,tr(int(o["user_id"]),"account_header")+"\n\n"+"\n\n".join(lines))
     if stock.count_documents({"product_id":o["product_id"],"status":"available"})==0:
         for aid in ADMIN_IDS:
             try: bot.send_message(aid,f"⚠️ <b>{esc(o['product_id'])} tugadi.</b> Yangi akkaunt Gmail va parollarini matn ko‘rinishida yuboring.")
@@ -528,13 +588,13 @@ def deliver(oid,chat_id):
 @bot.message_handler(content_types=["successful_payment"])
 def payment(m):
     p=m.successful_payment; o=orders.find_one({"payload":p.invoice_payload,"user_id":m.from_user.id,"status":"pending_payment"})
-    if not o or p.currency!="XTR" or p.total_amount!=o["price"]: bot.send_message(m.chat.id,"To‘lov qayd qilindi, lekin buyurtmani tekshirish uchun adminga yozing."); return
+    if not o or p.currency!="XTR" or p.total_amount!=o["price"]: bot.send_message(m.chat.id,tr(m.from_user.id,"payment_failed")); return
     res=orders.update_one({"_id":o["_id"],"status":"pending_payment"},{"$set":{"status":"paid","charge_id":p.telegram_payment_charge_id,"paid_at":now()}})
     if res.modified_count: deliver(o["_id"],m.chat.id)
 @bot.pre_checkout_query_handler(func=lambda q:True)
 def pre_checkout(q):
     o=orders.find_one({"payload":q.invoice_payload,"user_id":q.from_user.id,"status":"pending_payment"}); ok=bool(o and q.currency=="XTR" and q.total_amount==o["price"] and stock.count_documents({"product_id":o["product_id"],"status":"available"})>=o["quantity"])
-    bot.answer_pre_checkout_query(q.id,ok=ok,error_message=None if ok else "Buyurtma eskirgan yoki zaxira yetarli emas.")
+    bot.answer_pre_checkout_query(q.id,ok=ok,error_message=None if ok else tr(q.from_user.id,"checkout_failed"))
 @app.get("/health")
 def health():
     try: DB.command("ping"); return jsonify(status="ok",database="connected")
@@ -581,3 +641,4 @@ if __name__ == "__main__":
     else:
         # Production webhook: configure using `flask --app cpm_store_bot set-webhook`.
         app.run(host="0.0.0.0",port=int(os.getenv("PORT","5000")),debug=False)
+

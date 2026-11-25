@@ -102,14 +102,21 @@ def keep_polling_lock(owner, stop_event):
         except Exception:
             app.logger.exception("Could not renew Telegram polling lock")
 PRODUCTS = ["CPM1 VINIL AKK", "CPM1 FULL AKK", "CPM1 ANIME AKK", "CPM1 HD LOGO AKK"]
+def product_names():
+    """Built-in products plus products created from the admin panel."""
+    extra=[doc["_id"] for doc in products.find({}, {"_id":1}).sort("_id",1) if doc.get("_id") not in PRODUCTS]
+    return PRODUCTS+extra
+def shop_product_names():
+    # Do not expose a newly added product at zero price by accident.
+    return [name for name in product_names() if name in PRODUCTS or int((products.find_one({"_id":name},{"price":1}) or {}).get("price",0))>0]
 LANGS = {"uz": "🇺🇿 O‘zbekcha", "ru": "🇷🇺 Русский", "en": "🇬🇧 English"}
 T = {
 "uz": {"choose":"Tilni tanlang:","menu":"Asosiy menyu","buy":"🛍 Mahsulotlar","orders":"📦 Buyurtmalarim","support":"💬 Support","admin":"⚙️ Admin panel","sub":"Davom etish uchun kanalga obuna bo‘ling, keyin Tekshirish tugmasini bosing.","sub_all":"Quyidagi kanallarning barchasiga obuna bo‘ling:","subscribe":"📢 {name} kanaliga obuna bo‘lish","missing_link":"Kanal havolasi admin tomonidan sozlanmagan.","check":"✅ Tekshirish","not_sub":"Kanalga obuna topilmadi. Obuna bo‘lib qayta tekshiring.","quantity":"Nechta akkaunt kerak? Miqdorni son bilan yuboring:","quantity_invalid":"1 dan 50 gacha butun son yuboring.","purchase":"Sotib olasizmi?","yes":"✅ HA","no":"❌ YO‘Q","pay":"TO‘LOV TURINI TANLANG","adminpay":"👤 ADMIN ORQALI","stars":"⭐ STARS ORQALI","empty":"Hozircha mahsulot yo‘q.","orders_empty":"Buyurtmalaringiz yo‘q.","product_prompt":"Mahsulotni tanlang:","stock_count":"{count} ta","stock_empty":"❌ <b>{product}</b> hozircha qolmagan. Admin yangi akkaunt qo‘shgandan keyin qayta tanlang.","preview_default":"Akkaunt video abzori","price_unit":"Narxi: <b>{price} ⭐ / dona</b>","orders_title":"📦 Buyurtmalarim","order_product":"Mahsulot","order_quantity":"Miqdor","order_status":"Holat","order_date":"Sana","status_pending_admin":"Admin tasdig‘ini kutmoqda","status_pending_payment":"To‘lov kutilmoqda","status_delivered":"Yetkazildi","status_rejected":"Rad etildi","status_paid":"To‘landi","status_free":"Bepul","status_stock_error":"Zaxira xatosi","status_unknown":"Noma’lum","order_stale":"Buyurtma eskirgan. Qaytadan boshlang.","stock_short":"Zaxirada yetarli akkaunt yo‘q. Boshqa mahsulotni tanlang yoki keyinroq urinib ko‘ring.","manual_sent":"So‘rovingiz adminga yuborildi. Tasdiqlanishini kuting.","payment_help":"To‘lov qayd qilindi, ammo buyurtmani tekshirish uchun qo‘llab-quvvatlashga yozing.","support_text":"📩 Taklif yoki muammo bo‘lsa, <a href='https://t.me/cpm_java'>@cpm_java</a> ga yozing. Sizga yordam berishdan mamnunmiz."},
 "ru": {"choose":"Выберите язык:","menu":"Главное меню","buy":"🛍 Товары","orders":"📦 Мои заказы","support":"💬 Поддержка","admin":"⚙️ Панель администратора","sub":"Чтобы продолжить, подпишитесь на канал и нажмите «Проверить».","sub_all":"Подпишитесь на все каналы ниже:","subscribe":"📢 Подписаться на {name}","missing_link":"Ссылка канала не настроена администратором.","check":"✅ Проверить","not_sub":"Подписка не найдена. Подпишитесь и проверьте снова.","quantity":"Сколько аккаунтов нужно? Отправьте число:","quantity_invalid":"Введите целое число от 1 до 50.","purchase":"Покупаете?","yes":"✅ ДА","no":"❌ НЕТ","pay":"ВЫБЕРИТЕ СПОСОБ ОПЛАТЫ","adminpay":"👤 ЧЕРЕЗ АДМИНА","stars":"⭐ ЧЕРЕЗ STARS","empty":"Товаров пока нет.","orders_empty":"У вас пока нет заказов.","product_prompt":"Выберите товар:","stock_count":"{count} шт.","stock_empty":"❌ <b>{product}</b> временно закончился. Попробуйте позже.","preview_default":"Видеообзор аккаунта","price_unit":"Цена: <b>{price} ⭐ / шт.</b>","orders_title":"📦 Мои заказы","order_product":"Товар","order_quantity":"Количество","order_status":"Статус","order_date":"Дата","status_pending_admin":"Ожидает подтверждения администратора","status_pending_payment":"Ожидает оплату","status_delivered":"Доставлен","status_rejected":"Отклонён","status_paid":"Оплачен","status_free":"Бесплатно","status_stock_error":"Ошибка наличия","status_unknown":"Неизвестно","order_stale":"Заказ устарел. Начните заново.","stock_short":"Недостаточно аккаунтов. Выберите другой товар или попробуйте позже.","manual_sent":"Запрос отправлен администратору. Ожидайте подтверждения.","payment_help":"Платёж получен, но заказ не подтверждён. Напишите в поддержку.","support_text":"📩 Есть предложение или проблема? Напишите <a href='https://t.me/cpm_java'>@cpm_java</a>. Мы постараемся помочь."},
 "en": {"choose":"Choose your language:","menu":"Main menu","buy":"🛍 Products","orders":"📦 My orders","support":"💬 Support","admin":"⚙️ Admin panel","sub":"Subscribe to the channel to continue, then tap Check.","sub_all":"Please subscribe to all channels below:","subscribe":"📢 Join {name}","missing_link":"The channel link has not been configured by the admin.","check":"✅ Check","not_sub":"Subscription not found. Join the channel and check again.","quantity":"How many accounts do you need? Send a number:","quantity_invalid":"Send a whole number from 1 to 50.","purchase":"Would you like to buy?","yes":"✅ YES","no":"❌ NO","pay":"CHOOSE A PAYMENT METHOD","adminpay":"👤 VIA ADMIN","stars":"⭐ VIA STARS","empty":"No products are available yet.","orders_empty":"You have no orders yet.","product_prompt":"Choose a product:","stock_count":"{count} available","stock_empty":"❌ <b>{product}</b> is currently out of stock. Please try again later.","preview_default":"Account video preview","price_unit":"Price: <b>{price} ⭐ each</b>","orders_title":"📦 My orders","order_product":"Product","order_quantity":"Quantity","order_status":"Status","order_date":"Date","status_pending_admin":"Awaiting admin approval","status_pending_payment":"Awaiting payment","status_delivered":"Delivered","status_rejected":"Rejected","status_paid":"Paid","status_free":"Free","status_stock_error":"Stock error","status_unknown":"Unknown","order_stale":"This order expired. Please start again.","stock_short":"Not enough accounts in stock. Choose another product or try later.","manual_sent":"Your request was sent to the admin. Please wait for approval.","payment_help":"Payment was recorded, but the order needs review. Please contact support.","support_text":"📩 Have a suggestion or a problem? Contact <a href='https://t.me/cpm_java'>@cpm_java</a>. We’ll be glad to help."}}
-T["uz"].update({"preview_error":"Video obzor hozircha ochilmadi.","admin_profile":"👤 Admin profili","payment_failed":"To‘lov qayd qilindi, ammo buyurtma tekshiruvi uchun adminga yozing.","rejected":"To‘lov so‘rovi admin tomonidan rad etildi.","checkout_failed":"Buyurtma muddati o‘tgan yoki zaxira yetarli emas.","invoice_description":"{quantity} ta akkaunt","account_header":"✅ <b>Akkauntlaringiz:</b>","account_item":"akkaunt","account_code":"Kod","account_email":"Gmail","account_password":"Parol","account_note":"Holati"})
-T["ru"].update({"preview_error":"Видеообзор пока недоступен.","admin_profile":"👤 Профиль администратора","payment_failed":"Платёж записан, но для проверки заказа напишите администратору.","rejected":"Администратор отклонил запрос на оплату.","checkout_failed":"Срок заказа истёк или товара недостаточно.","invoice_description":"Аккаунтов: {quantity}","account_header":"✅ <b>Ваши аккаунты:</b>","account_item":"аккаунт","account_code":"Код","account_email":"Почта","account_password":"Пароль","account_note":"Статус"})
-T["en"].update({"preview_error":"The video preview is temporarily unavailable.","admin_profile":"👤 Admin profile","payment_failed":"Payment was recorded, but please contact the admin to review the order.","rejected":"The admin rejected the payment request.","checkout_failed":"The order expired or there is not enough stock.","invoice_description":"{quantity} account(s)","account_header":"✅ <b>Your accounts:</b>","account_item":"account","account_code":"Code","account_email":"Email","account_password":"Password","account_note":"Status"})
+T["uz"].update({"preview_error":"Video obzor hozircha ochilmadi.","admin_profile":"👤 Admin profili","payment_failed":"To‘lov qayd qilindi, ammo buyurtma tekshiruvi uchun adminga yozing.","rejected":"To‘lov so‘rovi admin tomonidan rad etildi.","checkout_failed":"Buyurtma muddati o‘tgan yoki zaxira yetarli emas.","invoice_description":"{quantity} ta akkaunt","account_header":"✅ <b>Akkauntlaringiz:</b>","account_item":"akkaunt","account_code":"Kod","account_email":"Gmail","account_password":"Parol","account_note":"Holati","product_unpriced":"Bu mahsulotning narxi hali belgilanmagan."})
+T["ru"].update({"preview_error":"Видеообзор пока недоступен.","admin_profile":"👤 Профиль администратора","payment_failed":"Платёж записан, но для проверки заказа напишите администратору.","rejected":"Администратор отклонил запрос на оплату.","checkout_failed":"Срок заказа истёк или товара недостаточно.","invoice_description":"Аккаунтов: {quantity}","account_header":"✅ <b>Ваши аккаунты:</b>","account_item":"аккаунт","account_code":"Код","account_email":"Почта","account_password":"Пароль","account_note":"Статус","product_unpriced":"Цена этого товара ещё не настроена."})
+T["en"].update({"preview_error":"The video preview is temporarily unavailable.","admin_profile":"👤 Admin profile","payment_failed":"Payment was recorded, but please contact the admin to review the order.","rejected":"The admin rejected the payment request.","checkout_failed":"The order expired or there is not enough stock.","invoice_description":"{quantity} account(s)","account_header":"✅ <b>Your accounts:</b>","account_item":"account","account_code":"Code","account_email":"Email","account_password":"Password","account_note":"Status","product_unpriced":"The price for this product has not been set yet."})
 def now(): return datetime.now(timezone.utc)
 def lang_of(uid):
     user=users.find_one({"_id":int(uid)},{"lang":1}) or {}
@@ -243,7 +250,10 @@ def subscription_prompt(chat,uid):
     bot.send_message(chat,tr(uid,"sub")+"\n\n"+tr(uid,"sub_all"),reply_markup=kb)
 def list_products(chat,uid):
     kb=types.InlineKeyboardMarkup(row_width=1)
-    for name in PRODUCTS:
+    names=shop_product_names()
+    if not names:
+        bot.send_message(chat,tr(uid,"empty")); return
+    for name in names:
         p=products.find_one({"_id":name}) or {"price":0,"video_file_id":None}
         amount=stock.count_documents({"product_id":name,"status":"available"})
         kb.add(inline_btn(f"{name} · {int(p.get('price',0))}⭐ · {tr(uid,'stock_count',count=amount)}",callback_data=f"item:{name}"))
@@ -301,7 +311,8 @@ def text_handler(m):
     else: bot.send_message(m.chat.id,tr(uid,"menu"),reply_markup=main_kb(uid))
 def admin_panel(chat):
     kb=types.InlineKeyboardMarkup(row_width=1)
-    for p in PRODUCTS: kb.add(inline_btn(f"⚙️ {p}",callback_data=f"adm:product:{p}"))
+    for p in product_names(): kb.add(inline_btn(f"⚙️ {p}",callback_data=f"adm:product:{p}"))
+    kb.add(inline_btn("➕ Mahsulot qo‘shish",callback_data="adm:addproduct",style="success"))
     kb.row(inline_btn("🧾 Kutayotgan buyurtmalar",callback_data="adm:pending"),inline_btn("📊 Statistika",callback_data="adm:stats"))
     kb.add(inline_btn("📢 Majburiy obuna",callback_data="adm:sub"))
     kb.add(inline_btn("🔎 Obunani tekshirish",callback_data="adm:testsub"))
@@ -335,6 +346,16 @@ def execute_broadcast(admin_chat,uid):
 def admin_text(m,s):
     uid=m.from_user.id; val=(m.text or "").strip(); step=s["step"]
     if val=="/cancel": sessions.pop(uid,None); admin_panel(m.chat.id); return
+    if step=="new_product":
+        name=" ".join(val.split())
+        if not name or len(name.encode("utf-8"))>40 or "\n" in name:
+            bot.send_message(m.chat.id,"Mahsulot nomi bo‘sh bo‘lmasin va 40 baytdan oshmasin. Qisqaroq nom yuboring yoki /cancel bosing."); return
+        if name in product_names():
+            bot.send_message(m.chat.id,"Bu nomdagi mahsulot allaqachon bor. Boshqa nom yuboring yoki /cancel bosing."); return
+        products.insert_one({"_id":name,"price":0,"video_file_id":None,"description":"","created_at":now(),"custom":True})
+        sessions.pop(uid,None)
+        bot.send_message(m.chat.id,f"✅ <b>{esc(name)}</b> mahsulot qo‘shildi. Narxini, videosini va tavsifini mahsulot kartasidan sozlang.")
+        admin_panel(m.chat.id); return
     if step=="price":
         if not val.isdigit() or not 1<=int(val)<=100000: bot.send_message(m.chat.id,"Stars narxini musbat butun son kiriting."); return
         products.update_one({"_id":s["product"]},{"$set":{"price":int(val)}},upsert=True); sessions.pop(uid,None); bot.send_message(m.chat.id,"Narx saqlandi."); return
@@ -434,7 +455,8 @@ def callbacks(c):
         subscription_prompt(chat,uid); return
     if data.startswith("item:"):
         pid=data[5:]
-        if pid not in PRODUCTS:return
+        if pid not in shop_product_names():
+            bot.send_message(chat,tr(uid,"product_unpriced")); return
         p=products.find_one({"_id":pid}) or {"_id":pid,"price":0}
         available=stock.count_documents({"product_id":pid,"status":"available"})
         if available==0:
@@ -512,6 +534,10 @@ def callbacks(c):
             current=(DB.settings.find_one({"_id":"main"}) or {}).get("sales_channel") or "sozlanmagan"
             sessions[uid]={"step":"sales_channel"}
             bot.send_message(chat,f"Sotuvlar kanali hozir: <code>{esc(current)}</code>\nKanal @username yoki -100... ko‘rinishidagi ID sini yuboring. Public t.me havolasi ham mumkin. O‘chirish: off")
+            return
+        if action=="addproduct":
+            sessions[uid]={"step":"new_product"}
+            bot.send_message(chat,"Yangi mahsulot nomini yuboring (40 baytgacha). Masalan: CPM2 GOLD AKK\nBekor qilish: /cancel")
             return
         if action=="testsub":
             channels=configured_subscriptions()

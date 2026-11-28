@@ -259,9 +259,35 @@ def list_products(chat,uid):
         kb.add(inline_btn(f"{name} · {int(p.get('price',0))}⭐ · {tr(uid,'stock_count',count=amount)}",callback_data=f"item:{name}"))
     bot.send_message(chat,tr(uid,"product_prompt"),reply_markup=kb)
 def send_item(chat,p,uid):
-    caption=f"<b>{esc(p['_id'])}</b>\n\n{esc(p.get('description') or tr(uid,'preview_default'))}\n\n{tr(uid,'price_unit',price=int(p.get('price',0)))}"
-    if p.get("video_file_id"): bot.send_video(chat,p["video_file_id"],caption=caption)
-    else: bot.send_message(chat,caption)
+    heading=f"<b>{esc(p['_id'])}</b>\n{tr(uid,'price_unit',price=int(p.get('price',0)))}"
+    bot.send_message(chat,heading)
+    source_chat=p.get("description_chat_id")
+    source_message=p.get("description_message_id")
+    copied=False
+    if source_chat and source_message:
+        try:
+            bot.copy_message(chat,source_chat,source_message)
+            copied=True
+        except Exception:
+            app.logger.exception("Could not copy formatted product description")
+    if not copied:
+        description=p.get("description") or tr(uid,"preview_default")
+        bot.send_message(chat,esc(description))
+    if p.get("video_file_id"):
+        try: bot.send_video(chat,p["video_file_id"])
+        except Exception:
+            app.logger.exception("Product preview video failed for %s",p.get("_id"))
+            bot.send_message(chat,tr(uid,"preview_error"))
+
+def save_description_message(message,product_id):
+    """Store a fallback text and the original Telegram message for rich formatting."""
+    plain=(getattr(message,"text",None) or getattr(message,"caption",None) or "").strip()
+    products.update_one({"_id":product_id},{"$set":{
+        "description":plain,
+        "description_chat_id":int(message.chat.id),
+        "description_message_id":int(message.message_id),
+        "description_updated_at":now(),
+    }},upsert=True)
 @bot.message_handler(commands=["start","help"])
 def start(m):
     uid=m.from_user.id
@@ -362,7 +388,11 @@ def admin_text(m,s):
     if step=="video":
         if val=="/skip": products.update_one({"_id":s["product"]},{"$set":{"video_file_id":None}},upsert=True); sessions.pop(uid,None); return
         bot.send_message(m.chat.id,"Video fayl yuboring yoki /skip."); return
-    if step=="description": products.update_one({"_id":s["product"]},{"$set":{"description":val}},upsert=True); sessions.pop(uid,None); bot.send_message(m.chat.id,"Tavsif saqlandi."); return
+    if step=="description":
+        save_description_message(m,s["product"])
+        sessions.pop(uid,None)
+        bot.send_message(m.chat.id,"✅ Tavsif saqlandi. Telegram yuborgan asl format, iqtibos va Premium emoji saqlanadi.")
+        return
     if step=="sub":
         if val.lower() in ("off","o‘chirish","ochirish"):
             DB.settings.update_one({"_id":"main"},{"$set":{"channels":[],"channel":"","url":"","enabled":False}},upsert=True)
@@ -428,6 +458,11 @@ def media(m):
         if not getattr(m,"video",None):
             bot.reply_to(m,"Video yuboring yoki /skip yozing."); return
         products.update_one({"_id":s["product"]},{"$set":{"video_file_id":m.video.file_id}},upsert=True); sessions.pop(m.from_user.id,None); bot.reply_to(m,"Video обзор saqlandi.")
+        return
+    if s and admin(m.from_user.id) and s.get("step")=="description":
+        save_description_message(m,s["product"])
+        sessions.pop(m.from_user.id,None)
+        bot.reply_to(m,"✅ Tavsif saqlandi. Telegram yuborgan asl format, iqtibos va Premium emoji saqlanadi.")
 @bot.callback_query_handler(func=lambda c:True)
 def callbacks(c):
     uid=c.from_user.id; data=c.data or ""; chat=c.message.chat.id
@@ -562,7 +597,7 @@ def callbacks(c):
             bot.send_message(chat,f"{esc(pid)}\nNarx: {int(p.get('price',0))}⭐\nZaxira: {stock.count_documents({'product_id':pid,'status':'available'})}",reply_markup=kb); return
         if action in ("price","video","desc","stock","free","unfree"):
             pid=":".join(args); step={"price":"price","video":"video","desc":"description","stock":"add_stock","free":"free","unfree":"unfree"}[action]; sessions[uid]={"step":step,"product":pid}
-            prompts={"price":"Yangi Stars narxini yuboring:","video":"Akkaunt обзор videosini yuboring (yoki /skip):","desc":"Yangi tavsifni yuboring:","add_stock":"Gmail va parolni alohida qatorda yuboring:\nemail@gmail.com\nparol","free":"Bir martalik bepul akkaunt oladigan foydalanuvchining Telegram ID sini yuboring:","unfree":"Bepul huquqi o‘chiriladigan foydalanuvchining Telegram ID sini yuboring:"}
+            prompts={"price":"Yangi Stars narxini yuboring:","video":"Akkaunt обзор videosini yuboring (yoki /skip):","desc":"Mahsulot tavsifini bitta xabar qilib yuboring. Iqtibos, formatlangan matn va Premium emoji o‘z ko‘rinishida saqlanadi. Yuborganingizdan so‘ng tavsif kiritish yakunlanadi:","add_stock":"Gmail va parolni alohida qatorda yuboring:\nemail@gmail.com\nparol","free":"Bir martalik bepul akkaunt oladigan foydalanuvchining Telegram ID sini yuboring:","unfree":"Bepul huquqi o‘chiriladigan foydalanuvchining Telegram ID sini yuboring:"}
             if step=="add_stock": prompts[step]="Har bir akkauntni bitta qatorda kiriting:\n02 | email@gmail.com | parol | OK\nTartib: kod | Gmail | parol | holati/izoh. Bir xabarda bir nechta akkaunt qo‘shish mumkin."
             bot.send_message(chat,prompts[step]); return
         if action=="sub": sessions[uid]={"step":"sub"}; bot.send_message(chat,"Majburiy obuna kanallarini har qatorga bittadan yuboring:\n@username | https://t.me/username | Kanal nomi\nYopiq kanal: -1001234567890 | https://t.me/+taklifhavola | Kanal nomi\nBot har bir kanalga administrator bo‘lishi kerak. O‘chirish uchun off yuboring."); return
